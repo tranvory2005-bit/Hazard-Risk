@@ -1186,7 +1186,7 @@ async function queryOpenFemaDisasters(stateAbbr, county) {
   if (!res.ok) return [];
   const d = await res.json();
   const list = d.DisasterDeclarationsSummaries || [];
-  return deduplicateFemaDisasters(list, county).slice(0, 12);
+  return deduplicateFemaDisasters(list, county);
 }
 
 
@@ -1938,7 +1938,7 @@ function renderSinkholeUi(rep) {
       tBox.style.display = "none";
     } else {
       tBox.style.display = "block";
-      tBody.innerHTML = sh.allPoints.slice(0, 10).map((p, idx) => `
+      tBody.innerHTML = sh.allPoints.map((p, idx) => `
         <tr id="sinkhole-row-${idx}" style="border-bottom:1px solid var(--line-soft);transition:background .3s ease;cursor:pointer;" title="Click to view on sinkhole map">
           <td style="padding:10px 8px;font-family:var(--mono);font-size:13px;font-weight:600;color:var(--ink);">${escapeHtml(p.id)}</td>
           <td style="padding:10px 8px;font-family:var(--mono);font-size:13px;font-weight:600;color:${p.distanceMiles <= 1 ? "#DC2626" : "#D97706"};">${p.distanceMiles} mi ${p.bearing}</td>
@@ -1948,7 +1948,7 @@ function renderSinkholeUi(rep) {
         </tr>
       `).join("");
 
-      sh.allPoints.slice(0, 10).forEach((p, idx) => {
+      sh.allPoints.forEach((p, idx) => {
         document.getElementById(`sinkhole-row-${idx}`)?.addEventListener("click", () => selectSinkholeFromTable(idx));
       });
     }
@@ -2550,27 +2550,40 @@ async function downloadPdfReport() {
     }
 
     if (sh.allPoints.length > 0) {
-      checkPageBreak(70);
+      checkPageBreak(50);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(9.5);
       doc.setTextColor(24, 33, 41);
-      doc.text("Documented Sinkholes in Vicinity (Nearest Records)", margin, y);
+      doc.text("Documented Sinkholes in Vicinity (All Recorded Incidents)", margin, y);
       y += 12;
 
-      doc.setFillColor(237, 240, 230);
-      doc.rect(margin, y, pageWidth - margin * 2, 14, "F");
-      doc.setFont("courier", "bold");
-      doc.setFontSize(7.5);
-      doc.setTextColor(76, 90, 98);
-      doc.text("REF ID", margin + 4, y + 10);
-      doc.text("DISTANCE / DIR", margin + 65, y + 10);
-      doc.text("DATE", margin + 155, y + 10);
-      doc.text("DIMENSIONS", margin + 220, y + 10);
-      doc.text("FIELD NOTES & DAMAGE", margin + 295, y + 10);
-      y += 16;
+      const drawSinkholeTableHeader = () => {
+        doc.setFillColor(237, 240, 230);
+        doc.rect(margin, y, pageWidth - margin * 2, 14, "F");
+        doc.setFont("courier", "bold");
+        doc.setFontSize(7.5);
+        doc.setTextColor(76, 90, 98);
+        doc.text("REF ID", margin + 4, y + 10);
+        doc.text("DISTANCE / DIR", margin + 65, y + 10);
+        doc.text("DATE", margin + 155, y + 10);
+        doc.text("DIMENSIONS", margin + 220, y + 10);
+        doc.text("FIELD NOTES & DAMAGE", margin + 295, y + 10);
+        y += 16;
+      };
 
-      sh.allPoints.slice(0, 5).forEach((p, idx) => {
-        checkPageBreak(16);
+      drawSinkholeTableHeader();
+
+      sh.allPoints.forEach((p, idx) => {
+        if (y + 18 > 745) {
+          doc.addPage();
+          y = 48;
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(9);
+          doc.setTextColor(24, 33, 41);
+          doc.text("Documented Sinkholes in Vicinity (Continued)", margin, y);
+          y += 12;
+          drawSinkholeTableHeader();
+        }
         doc.setFont("courier", "normal");
         doc.setFontSize(7.5);
         doc.setTextColor(24, 33, 41);
@@ -2589,14 +2602,14 @@ async function downloadPdfReport() {
     addParagraph(sh.sourceDescription, 8);
     addDivider();
 
-    // 07 Historical loss events (Deduplicated in PDF)
+    // 07 Historical loss events (All deduplicated events included)
     addSectionHeader("7. Nearby Historical Loss Events");
     if (rep.disasterErr) {
       addParagraph("Disaster history service unavailable.");
     } else if (rep.disasters.length) {
       addParagraph(rep.county ? `Federally declared disasters affecting ${rep.county}, ${rep.stateAbbr}, since 2000:` : "Federally declared disasters affecting this county since 2000:");
-      rep.disasters.slice(0, 6).forEach(d => {
-        checkPageBreak(22);
+      rep.disasters.forEach(d => {
+        checkPageBreak(24);
         doc.setFont("courier", "normal");
         doc.setFontSize(9);
         doc.setTextColor(173, 110, 40);
