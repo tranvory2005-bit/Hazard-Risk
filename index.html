@@ -1,0 +1,2777 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Groundtruth — Property Hazard Reports</title>
+  <meta name="description" content="Comprehensive property hazard screening reports covering FEMA flood zones, hurricane wind exposure, wildfire, earthquake, tornado, and location-level sinkhole risk with interactive hazard maps." />
+  <meta property="og:title" content="Groundtruth — Property Hazard Reports" />
+  <meta property="og:description" content="Comprehensive property hazard screening reports covering FEMA flood zones, hurricane wind exposure, wildfire, earthquake, tornado, and location-level sinkhole risk with interactive hazard maps." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    :root {
+      --ink: #182129;
+      --ink-soft: #4c5a62;
+      --ink-faint: #8b978d;
+      --paper: #EDF0E6;
+      --paper-raised: #F8F9F2;
+      --line: #C9CFC0;
+      --line-soft: #DBDFD2;
+      --amber: #AD6E28;
+      --amber-soft: #E4CDA6;
+      --flood: #2C5F74;
+      --flood-soft: #CBDCE1;
+      --risk-high: #96382A;
+      --risk-mod: #AD6E28;
+      --risk-low: #3C6E52;
+      --serif: 'Spectral', Georgia, serif;
+      --mono: 'IBM Plex Mono', Menlo, monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--paper);
+      color: var(--ink);
+      font-family: var(--serif);
+      font-size: 16px;
+      line-height: 1.55;
+      background-image:
+        repeating-linear-gradient(0deg, rgba(24,33,41,0.035) 0px, rgba(24,33,41,0.035) 1px, transparent 1px, transparent 96px),
+        repeating-linear-gradient(90deg, rgba(24,33,41,0.035) 0px, rgba(24,33,41,0.035) 1px, transparent 1px, transparent 96px);
+    }
+    a { color: var(--flood); }
+    .wrap { max-width: 890px; margin: 0 auto; padding: 0 28px; }
+
+    /* Top bar */
+    .topbar {
+      display: flex; align-items: baseline; justify-content: space-between;
+      padding: 26px 0 18px; border-bottom: 1px solid var(--line);
+    }
+    .brand { font-family: var(--serif); font-weight: 600; font-size: 20px; letter-spacing: 0.2px; }
+    .brand span { color: var(--amber); font-style: italic; font-weight: 400; }
+    .tagline { font-size: 13px; color: var(--ink-soft); }
+
+    /* Hero / Search */
+    .hero { padding: 64px 0 40px; }
+    .hero h1 {
+      font-size: 42px; font-weight: 600; line-height: 1.15; margin: 0 0 18px; max-width: 9.5em;
+    }
+    .hero p.lede { font-size: 17px; color: var(--ink-soft); max-width: 38em; margin: 0 0 36px; }
+
+    .search-row { display: flex; gap: 0; border-bottom: 2px solid var(--ink); padding-bottom: 2px; }
+    .search-row input {
+      flex: 1; border: none; background: transparent; font-family: var(--serif);
+      font-size: 22px; color: var(--ink); padding: 8px 4px; outline: none;
+    }
+    .search-row input::placeholder { color: var(--ink-faint); font-style: italic; }
+    .go-btn {
+      border: none; background: var(--ink); color: var(--paper-raised);
+      font-family: var(--mono); font-size: 13px; letter-spacing: 0.02em;
+      padding: 0 22px; cursor: pointer; transition: background .15s ease;
+    }
+    .go-btn:hover { background: var(--amber); }
+    .go-btn:disabled { background: var(--line); cursor: default; }
+
+    .subfields { display: flex; gap: 28px; margin-top: 14px; flex-wrap: wrap; }
+    .subfield { display: flex; flex-direction: column; gap: 4px; }
+    .subfield label { font-size: 12px; color: var(--ink-soft); }
+    .subfield input, .subfield select {
+      font-family: var(--mono); font-size: 14px; border: 1px solid var(--line);
+      background: var(--paper-raised); padding: 7px 9px; width: 150px; color: var(--ink);
+    }
+
+    .status-line { margin-top: 18px; font-family: var(--mono); font-size: 13px; color: var(--ink-soft); min-height: 20px; }
+    .status-line.err { color: var(--risk-high); }
+
+    /* Report */
+    #report { display: none; padding: 36px 0 90px; }
+    .report-head {
+      display: flex; justify-content: space-between; align-items: flex-end;
+      border-bottom: 1px solid var(--ink); padding-bottom: 16px; margin-bottom: 8px;
+    }
+    .report-head .addr { font-size: 26px; font-weight: 600; max-width: 24em; }
+    .report-head .meta { font-family: var(--mono); font-size: 12px; color: var(--ink-soft); text-align: right; }
+    .pdf-btn {
+      margin-top: 18px; border: 1px solid var(--ink); background: transparent; color: var(--ink);
+      font-family: var(--mono); font-size: 12.5px; padding: 9px 16px; cursor: pointer;
+      transition: all .15s ease;
+    }
+    .pdf-btn:hover { background: var(--ink); color: var(--paper-raised); }
+    .new-search {
+      font-family: var(--mono); font-size: 12px; color: var(--ink-soft); background: none; border: none;
+      text-decoration: underline; cursor: pointer; padding: 0; margin-left: 14px;
+    }
+
+    /* Summary strip */
+    .strip { display: flex; border: 1px solid var(--line); margin: 28px 0 8px; background: var(--paper-raised); }
+    .strip .cell { flex: 1; padding: 18px 16px; position: relative; }
+    .strip .cell + .cell { border-left: 1px solid var(--line); }
+    .strip .figure { font-family: var(--mono); font-size: 22px; font-weight: 500; }
+    .strip .label { font-size: 12px; color: var(--ink-soft); margin-top: 4px; }
+    .strip .tag {
+      display: inline-block; margin-top: 8px; font-family: var(--mono); font-size: 10.5px;
+      padding: 2px 6px; border-radius: 2px;
+    }
+    .tag.high { background: #F1D9D2; color: var(--risk-high); }
+    .tag.mod { background: #F0E1C8; color: var(--risk-mod); }
+    .tag.low { background: #D6E7DB; color: var(--risk-low); }
+    .tag.unk { background: var(--line-soft); color: var(--ink-soft); }
+
+    section.block { padding: 34px 0; border-bottom: 1px solid var(--line-soft); }
+    section.block:last-of-type { border-bottom: none; }
+    .block h2 {
+      font-size: 19px; font-family: var(--mono); font-weight: 500; letter-spacing: 0.01em;
+      color: var(--ink-soft); margin: 0 0 18px;
+    }
+    .block h2 .n { color: var(--amber); margin-right: 8px; }
+    .block h3 { font-size: 22px; margin: 0 0 10px; font-weight: 600; }
+    .block p { margin: 0 0 12px; color: var(--ink-soft); max-width: 58em; }
+    .block p.note { font-size: 13.5px; font-style: italic; color: var(--ink-faint); margin-top: 16px; }
+
+    .datarow { display: flex; gap: 36px; flex-wrap: wrap; margin: 18px 0; }
+    .datum .k { font-size: 12px; color: var(--ink-faint); }
+    .datum .v { font-family: var(--mono); font-size: 18px; margin-top: 2px; color: var(--ink); }
+
+    .bar-scale { display: flex; height: 8px; border-radius: 2px; overflow: hidden; margin: 2px 0 6px; border: 1px solid var(--line); }
+    .bar-scale span { flex: 1; }
+    .bar-labels { display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-faint); font-family: var(--mono); }
+    .marker-row { position: relative; height: 24px; margin-top: 14px; }
+    .marker {
+      position: absolute; top: 0; transform: translateX(-50%);
+      font-family: var(--mono); font-size: 11px; color: var(--ink);
+    }
+    .marker::after { content: "▾"; display: block; text-align: center; color: var(--ink); }
+
+    .timeline { border-left: 2px solid var(--line); margin-left: 4px; padding-left: 22px; }
+    .tl-item { position: relative; padding-bottom: 20px; }
+    .tl-item::before {
+      content: ""; position: absolute; left: -27px; top: 5px; width: 9px; height: 9px;
+      border-radius: 50%; background: var(--paper); border: 2px solid var(--amber);
+    }
+    .tl-item .yr { font-family: var(--mono); font-size: 13px; color: var(--amber); }
+    .tl-item .ttl { font-size: 16px; margin: 2px 0 2px; font-weight: 500; }
+    .tl-item .sub { font-size: 13.5px; color: var(--ink-soft); }
+    .no-events { color: var(--ink-faint); font-style: italic; }
+
+    /* Map panels */
+    .map-panels { display: flex; gap: 12px; margin: 16px 0 6px; flex-wrap: wrap; }
+    .hazard-map-box {
+      position: relative; height: 440px; flex: 1 1 100%; border: 1px solid var(--line);
+      background: var(--paper-raised); overflow: hidden;
+    }
+    .hazard-map-box img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
+    .map-marker-pin {
+      position: absolute; top: 50%; left: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px;
+      border-radius: 50%; background: #1D4ED8; border: 2.5px solid var(--paper-raised);
+      box-shadow: 0 0 0 2px #1D4ED8, 0 0 14px rgba(29, 78, 216, 0.7);
+      display: none; z-index: 4;
+      animation: pulseBlueMarker 2.2s infinite;
+    }
+    @keyframes pulseBlueMarker {
+      0% { transform: scale(1); box-shadow: 0 0 0 2px #1D4ED8, 0 0 8px rgba(29, 78, 216, 0.6); }
+      50% { transform: scale(1.18); box-shadow: 0 0 0 4px #1D4ED8, 0 0 18px rgba(29, 78, 216, 0.85); }
+      100% { transform: scale(1); box-shadow: 0 0 0 2px #1D4ED8, 0 0 8px rgba(29, 78, 216, 0.6); }
+    }
+    .map-placeholder {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center;
+      color: var(--ink-faint); font-family: var(--mono); font-size: 12.5px; padding: 20px; line-height: 1.6;
+    }
+    .map-caption { font-size: 12px; color: var(--ink-faint); margin-top: 6px; }
+    .map-caption a { color: var(--flood); }
+
+    /* Map Toolbar */
+    .map-toolbar {
+      display: flex; justify-content: space-between; align-items: center;
+      background: var(--paper-raised); border: 1px solid var(--line); border-bottom: none;
+      padding: 8px 12px; font-family: var(--mono); font-size: 11.5px;
+    }
+    .map-toolbar-group { display: flex; gap: 6px; align-items: center; }
+    .map-pill-btn {
+      background: transparent; border: 1px solid var(--line); padding: 3px 9px;
+      font-family: var(--mono); font-size: 11px; cursor: pointer; color: var(--ink-soft);
+      border-radius: 2px; transition: all .15s ease;
+    }
+    .map-pill-btn:hover { background: var(--line-soft); color: var(--ink); }
+    .map-pill-btn.active { background: var(--ink); color: var(--paper-raised); border-color: var(--ink); }
+
+    /* Map Legend Overlay */
+    .map-legend-overlay {
+      position: absolute; bottom: 12px; right: 12px; background: rgba(248,249,242,0.97);
+      border: 1px solid var(--line); padding: 10px 14px; font-family: var(--mono); font-size: 11px;
+      color: var(--ink); z-index: 5; border-radius: 4px; box-shadow: 0 4px 14px rgba(0,0,0,0.14);
+      display: flex; flex-direction: column; gap: 6px; pointer-events: none;
+      min-width: 235px; width: max-content; max-width: calc(100% - 24px); box-sizing: border-box;
+      overflow: hidden;
+    }
+    .legend-item {
+      display: flex; align-items: center; gap: 9px; line-height: 1.35;
+      white-space: normal; word-break: normal;
+    }
+    .legend-item span:last-child {
+      display: inline-block; white-space: normal;
+    }
+    .legend-dot { width: 11px; height: 11px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+    .legend-box { width: 11px; height: 11px; border-radius: 2px; display: inline-block; flex-shrink: 0; }
+    @media (max-width: 640px) {
+      .map-legend-overlay {
+        font-size: 10px; padding: 8px 10px; min-width: 195px; gap: 5px;
+        bottom: 8px; right: 8px; max-width: calc(100% - 16px);
+      }
+      .legend-item { gap: 6px; }
+      .legend-dot, .legend-box { width: 9px; height: 9px; }
+    }
+
+    /* Interactive Tooltip */
+    #sinkhole-tooltip {
+      position: absolute; display: none; z-index: 10; background: var(--paper-raised);
+      border: 1.5px solid var(--ink); padding: 12px 14px; border-radius: 3px;
+      box-shadow: 0 8px 24px rgba(24,33,41,0.22); pointer-events: auto; max-width: 310px;
+      animation: tipFadeIn .15s ease-out;
+    }
+    @keyframes tipFadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .tip-close-btn {
+      background: transparent; border: none; font-size: 16px; line-height: 1;
+      cursor: pointer; color: var(--ink-soft); padding: 1px 5px; border-radius: 2px;
+    }
+    .tip-close-btn:hover { background: var(--line-soft); color: var(--ink); }
+
+    /* Sinkhole Table */
+    .sinkhole-table-wrap {
+      overflow-x: auto; margin: 18px 0 10px; border: 1px solid var(--line); background: var(--paper-raised);
+    }
+    .sinkhole-table { width: 100%; border-collapse: collapse; text-align: left; }
+    .sinkhole-table th {
+      background: var(--paper); padding: 9px 8px; font-family: var(--mono); font-size: 11px;
+      color: var(--ink-soft); border-bottom: 1px solid var(--line); font-weight: 500;
+    }
+
+    .ins-range { border: 1px solid var(--line); background: var(--paper-raised); padding: 20px 22px; margin: 14px 0; }
+    .ins-range .lbl { font-size: 13px; color: var(--ink-soft); }
+    .ins-range .amt { font-family: var(--mono); font-size: 26px; margin: 4px 0 8px; }
+    .ins-total { border: 1.5px solid var(--ink); background: var(--paper-raised); padding: 22px 24px; margin-top: 8px; }
+    .ins-total .lbl { font-size: 13px; color: var(--ink-soft); }
+    .ins-total .amt { font-family: var(--mono); font-size: 32px; margin: 6px 0; }
+
+    footer.disclaim {
+      font-size: 12.5px; color: var(--ink-faint); border-top: 1px solid var(--line);
+      padding-top: 20px; max-width: 60em;
+    }
+    footer.disclaim p { margin: 0 0 8px; }
+
+    @media (max-width: 640px) {
+      .hero h1 { font-size: 32px; }
+      .strip { flex-direction: column; }
+      .strip .cell + .cell { border-left: none; border-top: 1px solid var(--line); }
+      .report-head { flex-direction: column; align-items: flex-start; gap: 10px; }
+      .report-head .meta { text-align: left; }
+      .map-toolbar { flex-direction: column; align-items: flex-start; gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="brand">Ground<span>truth</span></div>
+    <div class="tagline">Property hazard reports</div>
+  </div>
+
+  <div id="hero-section" class="hero">
+    <h1>Know the ground you're standing on before you sign.</h1>
+    <p class="lede">Enter any U.S. address to pull site-specific FEMA flood zones, hurricane wind exposure, FEMA National Risk Index ratings, and location-level sinkhole mapping — in one unified report.</p>
+
+    <div class="search-row">
+      <input id="address-input" type="text" placeholder="1200 Ocean Drive, Miami Beach, FL" autocomplete="off" />
+      <button class="go-btn" id="go-btn" onclick="runReport()">Generate report</button>
+    </div>
+    <div class="subfields">
+      <div class="subfield">
+        <label for="home-value">Est. home value</label>
+        <input id="home-value" type="text" value="350,000" inputmode="numeric" />
+      </div>
+      <div class="subfield">
+        <label for="hurricane-deductible">Hurricane deductible</label>
+        <select id="hurricane-deductible">
+          <option value="1">1% of coverage</option>
+          <option value="2" selected>2% of coverage</option>
+          <option value="3">3% of coverage</option>
+          <option value="4">4% of coverage</option>
+          <option value="5">5% of coverage</option>
+        </select>
+      </div>
+      <div class="subfield" style="flex-direction:row;align-items:center;gap:8px;padding-top:18px;">
+        <input id="home-mitigated" type="checkbox" style="width:auto;" />
+        <label for="home-mitigated" style="max-width:220px;">Newer roof / wind mitigation credits (impact windows, hip roof, clips)</label>
+      </div>
+      <div class="subfield" style="flex-direction:row;align-items:center;gap:8px;padding-top:18px;">
+        <input id="include-flood" type="checkbox" style="width:auto;" />
+        <label for="include-flood" style="max-width:230px;">Include a flood policy (auto-set by flood zone risk — override anytime)</label>
+      </div>
+    </div>
+    <div class="status-line" id="status-line"></div>
+  </div>
+
+  <div id="report">
+    <div class="report-head">
+      <div>
+        <div class="addr" id="rep-addr">—</div>
+        <button class="pdf-btn" id="pdf-btn" onclick="downloadPdfReport()">Download PDF report</button>
+        <button class="new-search" id="new-search-btn" onclick="resetSearch()">New search</button>
+      </div>
+      <div class="meta" id="rep-meta">—</div>
+    </div>
+
+    <!-- Summary Strip -->
+    <div class="strip" id="summary-strip"></div>
+
+    <!-- 01 FEMA Flood Zone -->
+    <section class="block">
+      <h2><span class="n">01</span>FEMA Flood Zone</h2>
+      <h3 id="flood-zone-name">—</h3>
+      <p id="flood-zone-desc"></p>
+      <div class="datarow">
+        <div class="datum"><div class="k">Zone</div><div class="v" id="flood-zone-code">—</div></div>
+        <div class="datum"><div class="k">Base flood elevation</div><div class="v" id="flood-bfe">—</div></div>
+        <div class="datum"><div class="k">Coordinates</div><div class="v" id="flood-coords">—</div></div>
+      </div>
+      <div class="map-panels">
+        <div class="hazard-map-box" id="flood-map-combined-box">
+          <img id="flood-map-basemap" alt="Aerial imagery" crossorigin="anonymous" />
+          <div id="flood-map-svg-container" style="position:absolute;inset:0;display:none;z-index:2;"></div>
+          <div class="map-marker-pin" id="flood-map-marker-aerial"></div>
+          <div class="map-placeholder" id="flood-map-aerial-placeholder">Loading map…</div>
+
+          <!-- Flood Map Legend Overlay -->
+          <div class="map-legend-overlay">
+            <div class="legend-item"><span class="legend-dot" style="background:#1D4ED8;box-shadow:0 0 0 2px #fff, 0 0 0 3.5px #1D4ED8;"></span> <span style="font-weight:600;color:#1D4ED8;">Target Parcel</span></div>
+            <div class="legend-item"><span class="legend-box" style="background:#96382A;opacity:0.6;border:1px solid #96382A;"></span> <span>High-Risk Flood Zone (AE/VE)</span></div>
+            <div class="legend-item"><span class="legend-box" style="background:#AD6E28;opacity:0.6;border:1px solid #AD6E28;"></span> <span>0.2% Annual Chance (X500)</span></div>
+            <div class="legend-item"><span class="legend-box" style="background:#3C6E52;opacity:0.5;border:1px solid #3C6E52;"></span> <span>Minimal Risk (Zone X)</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="map-caption" id="flood-map-caption">Loading…</p>
+      <p class="note" id="flood-note"></p>
+    </section>
+
+    <!-- 02 Hurricane / Wind -->
+    <section class="block">
+      <h2><span class="n">02</span>Hurricane / Wind Exposure</h2>
+      <h3 id="wind-tier-name">—</h3>
+      <p id="wind-desc"></p>
+      <div class="datarow">
+        <div class="datum"><div class="k">Approx. distance to coast</div><div class="v" id="wind-distance">—</div></div>
+      </div>
+      <div class="marker-row" id="wind-marker"></div>
+      <div class="bar-scale" id="wind-bar"></div>
+      <div class="bar-labels"><span>Low</span><span>Moderate</span><span>High</span><span>Very high</span></div>
+      <p class="note">Estimated from regional hurricane climatology and coastal proximity bands.</p>
+    </section>
+
+    <!-- 03 Wildfire -->
+    <section class="block">
+      <h2><span class="n">03</span>Wildfire Risk</h2>
+      <h3 id="wildfire-tier-name">—</h3>
+      <p id="wildfire-desc"></p>
+      <div class="marker-row" id="wildfire-marker"></div>
+      <div class="bar-scale" id="wildfire-bar"></div>
+      <div class="bar-labels"><span>Very low</span><span>Low</span><span>Moderate</span><span>High</span><span>Very high</span></div>
+      <p class="note">Source: FEMA National Risk Index (county-level modeled exposure).</p>
+    </section>
+
+    <!-- 04 Earthquake -->
+    <section class="block">
+      <h2><span class="n">04</span>Earthquake Risk</h2>
+      <h3 id="earthquake-tier-name">—</h3>
+      <p id="earthquake-desc"></p>
+      <div class="marker-row" id="earthquake-marker"></div>
+      <div class="bar-scale" id="earthquake-bar"></div>
+      <div class="bar-labels"><span>Very low</span><span>Low</span><span>Moderate</span><span>High</span><span>Very high</span></div>
+      <p class="note">Source: FEMA National Risk Index (county-level seismic hazard).</p>
+    </section>
+
+    <!-- 05 Tornado -->
+    <section class="block">
+      <h2><span class="n">05</span>Tornado Risk</h2>
+      <h3 id="tornado-tier-name">—</h3>
+      <p id="tornado-desc"></p>
+      <div class="marker-row" id="tornado-marker"></div>
+      <div class="bar-scale" id="tornado-bar"></div>
+      <div class="bar-labels"><span>Very low</span><span>Low</span><span>Moderate</span><span>High</span><span>Very high</span></div>
+      <p class="note">Source: FEMA National Risk Index (county-wide tornado likelihood).</p>
+    </section>
+
+    <!-- 06 SINKHOLE RISK & MAP (LOCATION-LEVEL) -->
+    <section class="block" id="sinkhole-section">
+      <h2><span class="n">06</span>Sinkhole Risk &amp; Karst Geology (Location-Level)</h2>
+      <h3 id="sinkhole-tier-name">—</h3>
+      <p id="sinkhole-desc"></p>
+      <div class="marker-row" id="sinkhole-marker"></div>
+      <div class="bar-scale" id="sinkhole-bar"></div>
+      <div class="bar-labels"><span>Very low</span><span>Low</span><span>Moderate</span><span>High</span><span>Very high</span></div>
+
+      <!-- Key Location Metrics -->
+      <div class="datarow" id="sinkhole-metrics-grid" style="margin-top:22px;"></div>
+
+      <!-- Sinkhole Map Toolbar -->
+      <div class="map-toolbar" style="margin-top:20px;">
+        <div class="map-toolbar-group">
+          <span style="font-weight:600;color:var(--ink);">Sinkhole Map</span>
+          <span style="color:var(--ink-faint);">| Radius:</span>
+          <button class="map-pill-btn sh-zoom-btn" data-zoom="1" id="sh-zoom-1">1 mi</button>
+          <button class="map-pill-btn sh-zoom-btn active" data-zoom="2" id="sh-zoom-2">2 mi</button>
+          <button class="map-pill-btn sh-zoom-btn" data-zoom="5" id="sh-zoom-5">5 mi</button>
+        </div>
+        <div class="map-toolbar-group">
+          <span style="color:var(--ink-faint);">Layer:</span>
+          <button class="map-pill-btn sh-type-btn active" data-type="satellite" id="sh-type-sat">Satellite</button>
+          <button class="map-pill-btn sh-type-btn" data-type="topo" id="sh-type-topo">Topographic</button>
+        </div>
+      </div>
+
+      <!-- Sinkhole Map Viewport -->
+      <div class="map-panels" style="margin-top:0;">
+        <div class="hazard-map-box" id="sinkhole-map-box">
+          <img id="sinkhole-map-basemap" alt="Sinkhole map imagery" crossorigin="anonymous" />
+          <div id="sinkhole-map-svg-container" style="position:absolute;inset:0;display:none;z-index:2;"></div>
+          <div class="map-marker-pin" id="sinkhole-map-marker-property" style="z-index:4;"></div>
+          <div class="map-placeholder" id="sinkhole-map-placeholder">Loading location-level sinkhole map…</div>
+
+          <!-- Floating Interactive Tooltip -->
+          <div id="sinkhole-tooltip"></div>
+
+          <!-- Map Legend Overlay -->
+          <div class="map-legend-overlay">
+            <div class="legend-item"><span class="legend-dot" style="background:#1D4ED8;box-shadow:0 0 0 2px #fff, 0 0 0 3.5px #1D4ED8;"></span> <span style="font-weight:600;color:#1D4ED8;">Target Parcel</span></div>
+            <div class="legend-item"><span class="legend-dot" style="background:#DC2626;box-shadow:0 0 0 2px #fff, 0 0 0 3.5px #DC2626;"></span> <span style="font-weight:600;color:#DC2626;">Documented Sinkhole (&lt;1 mi)</span></div>
+            <div class="legend-item"><span class="legend-dot" style="background:#D97706;box-shadow:0 0 0 2px #fff, 0 0 0 3.5px #D97706;"></span> <span style="font-weight:600;color:#D97706;">Documented Sinkhole (1–5 mi)</span></div>
+            <div class="legend-item"><span class="legend-box" style="background:#AD6E28;opacity:0.4;border:1px dashed #AD6E28;"></span> <span style="color:var(--ink);">Soluble Karst Bedrock (USGS)</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="map-caption" id="sinkhole-map-caption">Loading map details…</p>
+
+      <!-- Nearby Documented Sinkholes Table -->
+      <div id="sinkhole-incidents-container" style="display:none;margin-top:24px;">
+        <h4 style="font-family:var(--mono);font-size:14px;font-weight:600;margin:0 0 8px;color:var(--ink);">Documented Sinkhole &amp; Subsidence Incidents in Vicinity</h4>
+        <div class="sinkhole-table-wrap">
+          <table class="sinkhole-table">
+            <thead>
+              <tr>
+                <th>Reference ID</th>
+                <th>Distance / Direction</th>
+                <th>Date</th>
+                <th>Dimensions</th>
+                <th>Survey Notes &amp; Damage</th>
+              </tr>
+            </thead>
+            <tbody id="sinkhole-incidents-list"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <p class="note" id="sinkhole-note"></p>
+    </section>
+
+    <!-- 07 Nearby Historical Disasters -->
+    <section class="block">
+      <h2><span class="n">07</span>Nearby Historical Loss Events</h2>
+      <p id="disaster-intro"></p>
+      <div class="timeline" id="disaster-timeline"></div>
+      <p class="note">Source: FEMA Disaster Declarations Summary (OpenFEMA), filtered to this county since 2000.</p>
+    </section>
+
+    <!-- 08 EPA Environmental Hazards -->
+    <section class="block">
+      <h2><span class="n">08</span>EPA Contamination &amp; Environmental Hazards</h2>
+      <p id="epa-intro"></p>
+      <div class="timeline" id="epa-list"></div>
+      <p class="note">Superfund (NPL) sites within 3 miles: EPA's ArcGIS-hosted layer. Other EPA facilities within 1 mile: EPA Facility Registry Service.</p>
+    </section>
+
+    <!-- 09 Insurance Cost Range -->
+    <section class="block">
+      <h2><span class="n">09</span>Estimated Insurance Cost Range</h2>
+      <p>Illustrative annual premium ranges for a home valued around <span id="ins-homeval-echo">$350,000</span>, based on flood zone, wind exposure tier, and local hazard frequency. These figures represent an initial screening range, not a formal binder quote.</p>
+      <div class="datarow" style="margin-top:22px;">
+        <div style="flex:1;min-width:220px;" class="ins-range">
+          <div class="lbl">Homeowners (incl. wind) — <span id="ins-deductible-echo">2%</span> hurricane deductible ≈ <span id="ins-deductible-dollars">—</span></div>
+          <div class="amt" id="ins-home">—</div>
+        </div>
+        <div style="flex:1;min-width:220px;" class="ins-range">
+          <div class="lbl">Flood (NFIP-style)</div>
+          <div class="amt" id="ins-flood">—</div>
+        </div>
+      </div>
+      <div class="ins-total">
+        <div class="lbl">Combined estimated annual range</div>
+        <div class="amt" id="ins-total">—</div>
+      </div>
+      <p class="note" id="flood-lender-note" style="display:none;color:var(--risk-high);font-style:normal;"></p>
+      <p class="note">Actual premiums depend on carrier underwriting, elevation certificate, building construction type, deductible, and coverage limits.</p>
+    </section>
+
+    <footer class="disclaim">
+      <p><strong>How to read this report.</strong> This is a diligence screening tool, not a substitute for a flood elevation certificate, wind mitigation inspection, geotechnical soil boring/sinkhole testing, or licensed insurance quote. Flood zone data is from FEMA NFHL; wind estimates are derived from coastal climatology; wildfire, earthquake, and tornado ratings are from FEMA's National Risk Index; sinkhole risk is evaluated at the specific coordinate level using USGS National Karst bedrock layers, Florida Geological Survey Subsidence Incident records, Pennsylvania DCNR, and Kentucky Geological Survey LiDAR inventories.</p>
+      <p id="footer-generated">Generated —</p>
+    </footer>
+  </div>
+</div>
+
+<script>
+// Groundtruth Property Hazard Reports & Sinkhole Aerial PDF Integration
+const COAST_POINTS = [
+  [25.9017,-97.4975],[27.8006,-97.3964],[27.8339,-97.0614],[29.3013,-94.7977],[29.3838,-94.9027],[29.885,-93.94],
+  [30.2266,-93.2174],[29.9511,-90.0715],[29.2352,-89.9873],[30.3674,-89.0928],[30.6954,-88.0399],[30.4213,-87.2169],
+  [30.1588,-85.6602],[29.7255,-84.9827],[29.1383,-83.0334],[27.9506,-82.4572],[27.3364,-82.5307],[26.6406,-81.8723],
+  [26.142,-81.7948],[24.5551,-81.78],[25.7617,-80.1918],[26.1224,-80.1373],[26.7153,-80.0534],[27.6386,-80.3973],
+  [28.3922,-80.6077],[29.2108,-81.0228],[29.9012,-81.3124],[30.3322,-81.6557],[31.1499,-81.4915],[32.0809,-81.0912],
+  [32.2163,-80.7526],[32.7765,-79.9311],[33.6891,-78.8867],[34.2257,-77.9447],[34.7229,-76.726],[35.2199,-75.6288],
+  [36.8529,-75.978],[38.3365,-75.0849],[39.3643,-74.4229],[38.9351,-74.906],[41.0362,-71.9518],[40.7128,-74.006],
+  [41.3083,-72.9279],[41.824,-71.4128],[42.0526,-70.1786],[42.3601,-71.0589],[43.0718,-70.7626],[43.6591,-70.2568],
+  [44.3876,-68.2039],[18.4655,-66.1057],[18.3419,-64.9307]
+];
+
+const STATE_HURRICANE_BASELINE = {
+  FL:5, LA:5, TX:4, MS:4, AL:4, SC:4, NC:4, GA:4, PR:5, VI:5,
+  VA:3, MD:3, DE:3, NJ:3, NY:3, CT:2, RI:2, MA:2, NH:2, ME:2, DEFAULT:1
+};
+
+const FLOOD_ZONES = {
+  VE:{name:"Coastal high-hazard area (VE)",risk:5,tag:"high",desc:"High-risk coastal zone subject to wave action."},
+  V:{name:"Coastal high-hazard area (V)",risk:5,tag:"high",desc:"High-risk coastal zone subject to wave action."},
+  AE:{name:"High-risk flood area (AE)",risk:4,tag:"high",desc:"1% annual chance ('100-year') flood zone with base elevations."},
+  A:{name:"High-risk flood area (A)",risk:4,tag:"high",desc:"1% annual chance flood zone; no detailed BFE determined."},
+  AO:{name:"High-risk shallow flooding area (AO)",risk:4,tag:"high",desc:"Shallow sheet-flow flooding 1–3 feet deep."},
+  AH:{name:"High-risk shallow flooding area (AH)",risk:4,tag:"high",desc:"Shallow ponding 1–3 feet deep."},
+  AR:{name:"Moderate/high-risk area, levee (AR)",risk:3,tag:"mod",desc:"Protected by flood control system being restored."},
+  A99:{name:"High-risk area, protected (A99)",risk:3,tag:"mod",desc:"Protected by federal flood system under construction."},
+  X500:{name:"Moderate-risk area (Shaded X / 0.2%)",risk:2,tag:"mod",desc:"0.2% annual chance ('500-year') flood zone."},
+  X:{name:"Minimal-risk area (X)",risk:1,tag:"low",desc:"Outside 1% and 0.2% annual chance floodplains."},
+  D:{name:"Undetermined risk area (D)",risk:3,tag:"unk",desc:"Flood risk has not been determined for this area."}
+};
+
+let currentReport = null;
+let userManuallyToggledFlood = false;
+let currentSinkholeRadius = 2.0;
+let currentSinkholeBasemapType = "satellite";
+const FLOOD_MAP_HALF_BBOX = 0.008;
+
+function haversineMiles(lat1, lon1, lat2, lon2) {
+  const toRad = x => x * Math.PI / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 3958.8 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function calculateBearing(lat1, lon1, lat2, lon2) {
+  const toRad = x => x * Math.PI / 180;
+  const y = Math.sin(toRad(lon2 - lon1)) * Math.cos(toRad(lat2));
+  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lon2 - lon1));
+  const brng = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  const dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+  return dirs[Math.round(brng / 22.5) % 16];
+}
+
+function nearestCoastDistance(lat, lon) {
+  let minD = Infinity;
+  for (const [cLat, cLon] of COAST_POINTS) {
+    const d = haversineMiles(lat, lon, cLat, cLon);
+    if (d < minD) minD = d;
+  }
+  return Math.round(minD);
+}
+
+async function fetchWithTimeout(url, opts, ms = 8500) {
+  const c = new AbortController();
+  const id = setTimeout(() => c.abort(), ms);
+  try {
+    return await fetch(url, { ...opts, signal: c.signal });
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+async function fileToDataUrl(blob) {
+  try {
+    return await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  } catch {
+    const buf = await blob.arrayBuffer();
+    let binary = "";
+    const bytes = new Uint8Array(buf);
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return `data:${blob.type || "image/jpeg"};base64,${btoa(binary)}`;
+  }
+}
+
+function esriExportAerialUrl(lat, lon, delta, width, height, format = "jpg") {
+  return `https://services.arcgisonline.com/arcgis/rest/services/World_Imagery/MapServer/export?bbox=${lon - delta},${lat - delta},${lon + delta},${lat + delta}&bboxSR=4326&imageSR=4326&size=${width},${height}&format=${format}&f=image`;
+}
+
+function esriExportTopoUrl(lat, lon, delta, width, height) {
+  return `https://services.arcgisonline.com/arcgis/rest/services/World_Topo_Map/MapServer/export?bbox=${lon - delta},${lat - delta},${lon + delta},${lat + delta}&bboxSR=4326&imageSR=4326&size=${width},${height}&format=${png32}&f=image`;
+}
+
+function detectImageFormat(dataUrl) {
+  if (typeof dataUrl === "string" && dataUrl.startsWith("data:image/jpeg")) return "JPEG";
+  if (typeof dataUrl === "string" && dataUrl.startsWith("data:image/webp")) return "WEBP";
+  return "PNG";
+}
+
+function getBase64FromImageElement(img) {
+  try {
+    if (!img || !img.complete || !img.naturalWidth) return null;
+    const canvas = document.createElement("canvas");
+    canvas.width = img.naturalWidth || 640;
+    canvas.height = img.naturalHeight || 480;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+    return canvas.toDataURL("image/jpeg", 0.90);
+  } catch (e) {
+    console.warn("DOM canvas capture skipped:", e);
+    return null;
+  }
+}
+
+async function getOrFetchSinkholeAerialDataUrl(report) {
+  if (report?.sinkholeBasemapDataUrl) return report.sinkholeBasemapDataUrl;
+
+  const domImg = document.getElementById("sinkhole-map-basemap");
+  const domData = getBase64FromImageElement(domImg);
+  if (domData) {
+    if (report) report.sinkholeBasemapDataUrl = domData;
+    return domData;
+  }
+
+  const delta = (2 / 69) * 1.15;
+  const urls = [
+    esriExportAerialUrl(report.lat, report.lon, delta, 640, 480, "jpg"),
+    esriExportAerialUrl(report.lat, report.lon, delta, 640, 480, "png32")
+  ];
+
+  for (const url of urls) {
+    try {
+      const resp = await fetchWithTimeout(url, void 0, 8500);
+      if (resp && resp.ok) {
+        const blob = await resp.blob();
+        const dataUrl = await fileToDataUrl(blob);
+        if (dataUrl && dataUrl.length > 200) {
+          if (report) report.sinkholeBasemapDataUrl = dataUrl;
+          return dataUrl;
+        }
+      }
+    } catch (err) {
+      console.warn("Sinkhole map aerial fetch attempt failed:", err);
+    }
+  }
+
+  return new Promise(resolve => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const c = document.createElement("canvas");
+        c.width = 640; c.height = 480;
+        const ctx = c.getContext("2d");
+        ctx.drawImage(img, 0, 0, 640, 480);
+        const du = c.toDataURL("image/jpeg", 0.90);
+        if (report) report.sinkholeBasemapDataUrl = du;
+        resolve(du);
+      } catch {
+        resolve(null);
+      }
+    };
+    img.onerror = () => resolve(null);
+    setTimeout(() => resolve(null), 7000);
+    img.src = urls[0];
+  });
+}
+
+async function getOrFetchFloodAerialDataUrl(report) {
+  if (report?.mapBasemapDataUrl) return report.mapBasemapDataUrl;
+
+  const domImg = document.getElementById("flood-map-basemap");
+  const domData = getBase64FromImageElement(domImg);
+  if (domData) {
+    if (report) report.mapBasemapDataUrl = domData;
+    return domData;
+  }
+
+  const urls = [
+    esriExportAerialUrl(report.lat, report.lon, FLOOD_MAP_HALF_BBOX, 640, 480, "jpg"),
+    esriExportAerialUrl(report.lat, report.lon, FLOOD_MAP_HALF_BBOX, 640, 480, "png32")
+  ];
+
+  for (const url of urls) {
+    try {
+      const resp = await fetchWithTimeout(url, void 0, 8500);
+      if (resp && resp.ok) {
+        const blob = await resp.blob();
+        const dataUrl = await fileToDataUrl(blob);
+        if (dataUrl && dataUrl.length > 200) {
+          if (report) report.mapBasemapDataUrl = dataUrl;
+          return dataUrl;
+        }
+      }
+    } catch (err) {
+      console.warn("Flood map aerial fetch error:", err);
+    }
+  }
+  return null;
+}
+
+async function prefetchReportMaps(report) {
+  if (!report) return;
+  const [floodImg, zones, sinkholeImg] = await Promise.allSettled([
+    getOrFetchFloodAerialDataUrl(report),
+    queryFloodPolygons(report.lat, report.lon, FLOOD_MAP_HALF_BBOX),
+    getOrFetchSinkholeAerialDataUrl(report)
+  ]);
+  if (currentReport !== report) return;
+  if (floodImg.status === "fulfilled" && floodImg.value) report.mapBasemapDataUrl = floodImg.value;
+  if (zones.status === "fulfilled" && zones.value) report.mapZoneFeatures = zones.value;
+  if (sinkholeImg.status === "fulfilled" && sinkholeImg.value) report.sinkholeBasemapDataUrl = sinkholeImg.value;
+}
+
+const US_STATES = {
+  Alabama:"AL",Alaska:"AK",Arizona:"AZ",Arkansas:"AR",California:"CA",Colorado:"CO",Connecticut:"CT",
+  Delaware:"DE",Florida:"FL",Georgia:"GA",Hawaii:"HI",Idaho:"ID",Illinois:"IL",Indiana:"IN",Iowa:"IA",
+  Kansas:"KS",Kentucky:"KY",Louisiana:"LA",Maine:"ME",Maryland:"MD",Massachusetts:"MA",Michigan:"MI",
+  Minnesota:"MN",Mississippi:"MS",Missouri:"MO",Montana:"MT",Nebraska:"NE",Nevada:"NV","New Hampshire":"NH",
+  "New Jersey":"NJ","New Mexico":"NM","New York":"NY","North Carolina":"NC","North Dakota":"ND",Ohio:"OH",
+  Oklahoma:"OK",Oregon:"OR",Pennsylvania:"PA","Rhode Island":"RI","South Carolina":"SC","South Dakota":"SD",
+  Tennessee:"TN",Texas:"TX",Utah:"UT",Vermont:"VT",Virginia:"VA",Washington:"WA","West Virginia":"WV",
+  Wisconsin:"WI",Wyoming:"WY","Puerto Rico":"PR"
+};
+
+function stateNameToAbbr(name) { return US_STATES[name] || ""; }
+
+async function geocodeAddress(query) {
+  try {
+    const url = "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates?singleLine=" + encodeURIComponent(query) + "&f=json&outFields=Addr_type,Match_addr,StAddr,City,Subregion,Region,Postal,Country&maxLocations=1";
+    const res = await fetchWithTimeout(url, void 0, 7000);
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.candidates?.length) {
+        const c = data.candidates[0];
+        const reg = c.attributes?.Region || "";
+        const st = stateNameToAbbr(reg) || reg;
+        return {
+          lat: String(c.location.y),
+          lon: String(c.location.x),
+          display_name: c.address || c.attributes?.Match_addr || query,
+          address: {
+            state: reg,
+            county: c.attributes?.Subregion || "",
+            city: c.attributes?.City || "",
+            postcode: c.attributes?.Postal || "",
+            "ISO3166-2-lvl4": st ? `US-${st}` : ""
+          }
+        };
+      }
+    }
+  } catch (err) {
+    console.warn("ArcGIS geocoding failed, trying Nominatim fallback...", err);
+  }
+
+  const url = "https://nominatim.openstreetmap.org/search?format=json&addressdetails=1&limit=1&countrycodes=us&q=" + encodeURIComponent(query);
+  const res = await fetchWithTimeout(url, { headers: { Accept: "application/json" } }, 9000);
+  if (!res.ok) throw new Error("geocode-http-" + res.status);
+  const arr = await res.json();
+  if (!arr?.length) throw new Error("geocode-empty");
+  return arr[0];
+}
+
+async function queryFloodPolygons(lat, lon, delta) {
+  const url = "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/USA_Flood_Hazard_Reduced_Set_gdb/FeatureServer/0/query?geometry=" + [lon - delta, lat - delta, lon + delta, lat + delta].join(",") + "&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=FLD_ZONE,ZONE_SUBTY&returnGeometry=true&outSR=4326&f=json";
+  const res = await fetchWithTimeout(url, void 0, 8000);
+  if (!res.ok) return [];
+  const d = await res.json();
+  return d.features || [];
+}
+
+async function queryFloodPoint(lat, lon) {
+  const femaUrl = "https://hazards.fema.gov/gis/nfhl/rest/services/public/NFHL/MapServer/28/query?geometry=" + lon + "," + lat + "&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=FLD_ZONE,ZONE_SUBTY,STATIC_BFE&returnGeometry=false&f=json";
+  try {
+    const res = await fetchWithTimeout(femaUrl, void 0, 7500);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.features?.length) {
+        const a = data.features[0].attributes;
+        return {
+          zone: a.FLD_ZONE || "D",
+          subtype: a.ZONE_SUBTY || "",
+          bfe: typeof a.STATIC_BFE === "number" && a.STATIC_BFE > -9000 ? a.STATIC_BFE : null
+        };
+      }
+    }
+  } catch (e) {
+    console.warn("FEMA direct query failed, trying Living Atlas mirror...");
+  }
+
+  const arcgisUrl = "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/USA_Flood_Hazard_Reduced_Set_gdb/FeatureServer/0/query?geometry=" + lon + "," + lat + "&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=false&f=json";
+  const res = await fetchWithTimeout(arcgisUrl, void 0, 7500);
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!data.features?.length) return null;
+  const a = data.features[0].attributes || {};
+  return {
+    zone: a.FLD_ZONE || a.fld_zone || "D",
+    subtype: a.ZONE_SUBTY || a.zone_subty || "",
+    bfe: typeof a.STATIC_BFE === "number" && a.STATIC_BFE > -9000 ? a.STATIC_BFE : null,
+    source: "living-atlas"
+  };
+}
+
+function normalizeFloodZoneKey(zone, subtype) {
+  if (!zone) return "D";
+  const z = zone.toUpperCase().trim();
+  if (z === "X" && subtype && subtype.toUpperCase().includes("0.2")) return "X500";
+  if (FLOOD_ZONES[z]) return z;
+  if (z.startsWith("V")) return "VE";
+  if (z.startsWith("A")) return "AE";
+  return "D";
+}
+
+async function queryUsgsKarst(lat, lon) {
+  const layers = [
+    { id: 14, name: "Soluble Carbonate Karst", isSoluble: true },
+    { id: 13, name: "Soluble Evaporite Karst", isSoluble: true },
+    { id: 15, name: "Sandstone Karst / Piping", isSoluble: false }
+  ];
+  for (const layer of layers) {
+    try {
+      const url = `https://services3.arcgis.com/C5aIa0c3gUMji8fg/arcgis/rest/services/Karst__USGS/FeatureServer/${layer.id}/query?geometry=${lon},${lat}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=UNIT_NAME,KARST_TYPE,ROCKTYPE1,Exposure,Climate,Induration,UNIT_AGE&returnGeometry=false&f=json`;
+      const res = await fetchWithTimeout(url, void 0, 7500);
+      if (res.ok) {
+        const d = await res.json();
+        if (d.features?.length) {
+          const a = d.features[0].attributes;
+          return {
+            unitName: a.UNIT_NAME || "Karst Formation",
+            karstType: a.KARST_TYPE || layer.name,
+            rockType: a.ROCKTYPE1 || "limestone",
+            exposure: a.Exposure || "E",
+            climate: a.Climate || "",
+            formationAge: a.UNIT_AGE || "",
+            isSoluble: layer.isSoluble,
+            source: "USGS National Karst"
+          };
+        }
+      }
+    } catch {}
+  }
+  return null;
+}
+
+async function queryKarstPolygons(lat, lon, delta = 0.04) {
+  try {
+    const url = `https://services3.arcgis.com/C5aIa0c3gUMji8fg/arcgis/rest/services/Karst__USGS/FeatureServer/14/query?geometry=${lon - delta},${lat - delta},${lon + delta},${lat + delta}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=UNIT_NAME,KARST_TYPE,ROCKTYPE1&returnGeometry=true&outSR=4326&resultRecordCount=50&f=json`;
+    const res = await fetchWithTimeout(url, void 0, 7500);
+    if (res.ok) {
+      const d = await res.json();
+      return d.features || [];
+    }
+  } catch {}
+  return [];
+}
+
+async function queryDocumentedSinkholes(lat, lon, stateAbbr) {
+  const pts = [];
+  if (stateAbbr === "FL") {
+    try {
+      const url = `https://ca.dep.state.fl.us/arcgis/rest/services/OpenData/FGS_SUBSIDENCE/MapServer/0/query?geometry=${lon},${lat}&geometryType=esriGeometryPoint&inSR=4326&distance=6&units=esriSRUnit_StatuteMile&outFields=REF_NUM,COUNTY,EVENT_DATE,SINDEPTH,SINWIDTH,TRUE_SINK,PROPDAM,COMMENTS,ACCESS_&returnGeometry=true&outSR=4326&resultRecordCount=120&f=json`;
+      const res = await fetchWithTimeout(url, void 0, 8500);
+      if (res.ok) {
+        const d = await res.json();
+        for (const feat of d.features || []) {
+          const g = feat.geometry;
+          if (!g || typeof g.x !== "number" || typeof g.y !== "number") continue;
+          const dist = haversineMiles(lat, lon, g.y, g.x);
+          if (dist > 5.5) continue;
+          const a = feat.attributes || {};
+          let dateStr = "";
+          if (a.EVENT_DATE) {
+            try { dateStr = new Date(a.EVENT_DATE).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" }); } catch {}
+          }
+          pts.push({
+            id: a.REF_NUM || `FGS-${pts.length + 1}`,
+            lat: g.y,
+            lon: g.x,
+            distanceMiles: Math.round(dist * 100) / 100,
+            bearing: calculateBearing(lat, lon, g.y, g.x),
+            date: dateStr,
+            depthFt: typeof a.SINDEPTH === "number" && a.SINDEPTH > 0 ? a.SINDEPTH : null,
+            widthFt: typeof a.SINWIDTH === "number" && a.SINWIDTH > 0 ? a.SINWIDTH : null,
+            verified: a.TRUE_SINK === "Y" ? "Verified" : a.TRUE_SINK === "N" ? "Unverified/Other" : "Reported",
+            damage: a.PROPDAM === "Y" ? "Property damage reported" : a.PROPDAM === "N" ? "No damage reported" : "Unknown",
+            comments: (a.COMMENTS || a.ACCESS_ || "").trim(),
+            source: "Florida Geological Survey"
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("FGS sinkhole query failed:", e);
+    }
+  } else if (stateAbbr === "PA") {
+    try {
+      const url = `https://mapservices.pasda.psu.edu/server/rest/services/pasda/DCNR2/MapServer/0/query?geometry=${lon - 0.08},${lat - 0.08},${lon + 0.08},${lat + 0.08}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=LAT_DD,LONG_DD,KARST_TYPE&returnGeometry=true&outSR=4326&resultRecordCount=100&f=json`;
+      const res = await fetchWithTimeout(url, void 0, 7500);
+      if (res.ok) {
+        const d = await res.json();
+        for (const feat of d.features || []) {
+          const a = feat.attributes || {};
+          const fLat = a.LAT_DD || feat.geometry?.y;
+          const fLon = a.LONG_DD || feat.geometry?.x;
+          if (!fLat || !fLon) continue;
+          const dist = haversineMiles(lat, lon, fLat, fLon);
+          if (dist > 5.5) continue;
+          pts.push({
+            id: `PA-DCNR-${pts.length + 1}`,
+            lat: fLat,
+            lon: fLon,
+            distanceMiles: Math.round(dist * 100) / 100,
+            bearing: calculateBearing(lat, lon, fLat, fLon),
+            comments: a.KARST_TYPE || "Mapped karst depression / sinkhole",
+            source: "Pennsylvania DCNR"
+          });
+        }
+      }
+    } catch {}
+  } else if (stateAbbr === "KY") {
+    try {
+      const url = `https://kgs.uky.edu/arcgis/rest/services/KYWater/LiDAR_Sinkholes/MapServer/0/query?geometry=${lon - 0.08},${lat - 0.08},${lon + 0.08},${lat + 0.08}&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=*&returnGeometry=true&outSR=4326&resultRecordCount=100&f=json`;
+      const res = await fetchWithTimeout(url, void 0, 7500);
+      if (res.ok) {
+        const d = await res.json();
+        for (const feat of d.features || []) {
+          const g = feat.geometry;
+          if (!g) continue;
+          const fLat = g.y || g.latitude;
+          const fLon = g.x || g.longitude;
+          if (!fLat || !fLon) continue;
+          const dist = haversineMiles(lat, lon, fLat, fLon);
+          if (dist > 5.5) continue;
+          pts.push({
+            id: `KY-KGS-${pts.length + 1}`,
+            lat: fLat,
+            lon: fLon,
+            distanceMiles: Math.round(dist * 100) / 100,
+            bearing: calculateBearing(lat, lon, fLat, fLon),
+            comments: "LiDAR-identified sinkhole depression",
+            source: "Kentucky Geological Survey"
+          });
+        }
+      }
+    } catch {}
+  }
+  pts.sort((a, b) => a.distanceMiles - b.distanceMiles);
+  return pts;
+}
+
+async function queryFloridaVulnerability(lat, lon) {
+  const box = [lon - 0.002, lat - 0.002, lon + 0.002, lat + 0.002].join(",");
+  const url = `https://leo.at.geoplan.ufl.edu/arcgis/rest/services/etdm_services/Resilience/MapServer/identify?geometry=${lon},${lat}&geometryType=esriGeometryPoint&sr=4326&layers=all:26&tolerance=2&mapExtent=${box}&imageDisplay=300,300,96&returnGeometry=false&f=json`;
+  try {
+    const res = await fetchWithTimeout(url, void 0, 7500);
+    if (!res.ok) return null;
+    const d = await res.json();
+    if (!d.results?.length) return null;
+    const val = parseInt(d.results[0].attributes?.Value ?? d.results[0].value, 10);
+    if (!val || val < 1 || val > 4) return null;
+    const labels = [
+      "Least favorable geology for sinkhole formation",
+      "Less favorable geology for sinkhole formation",
+      "More favorable geology for sinkhole formation",
+      "Most favorable geology for sinkhole formation"
+    ];
+    return { label: labels[val - 1], score: val };
+  } catch {
+    return null;
+  }
+}
+
+async function performSinkholeAssessment(lat, lon, stateAbbr) {
+  const [bedrock, points, flVuln, polygons] = await Promise.all([
+    queryUsgsKarst(lat, lon),
+    queryDocumentedSinkholes(lat, lon, stateAbbr),
+    stateAbbr === "FL" ? queryFloridaVulnerability(lat, lon) : Promise.resolve(null),
+    queryKarstPolygons(lat, lon, 0.04)
+  ]);
+
+  const nearest = points.length ? points[0] : null;
+  const p1mi = points.filter(p => p.distanceMiles <= 1.0).length;
+  const p3mi = points.filter(p => p.distanceMiles <= 3.0).length;
+  const p5mi = points.length;
+  const isSoluble = !!(bedrock && bedrock.isSoluble);
+  const isExposed = bedrock?.exposure === "E";
+  const vulnScore = flVuln?.score ?? 0;
+
+  let tier = 1;
+  if ((nearest && nearest.distanceMiles <= 0.35) || (nearest && nearest.distanceMiles <= 0.75) || p1mi >= 3 || (p3mi >= 8 && isSoluble) || (vulnScore === 4 && p1mi >= 1)) {
+    tier = 5;
+  } else if ((nearest && nearest.distanceMiles <= 1.5) || p1mi >= 1 || (p3mi >= 3 && isSoluble) || (vulnScore === 4 && isSoluble) || (vulnScore === 3 && p1mi >= 1)) {
+    tier = 4;
+  } else if ((nearest && nearest.distanceMiles <= 3.0) || (isSoluble && isExposed) || vulnScore === 3 || (p5mi >= 3 && isSoluble)) {
+    tier = 3;
+  } else if ((nearest && nearest.distanceMiles <= 5.0) || isSoluble || vulnScore === 2 || polygons.length > 0) {
+    tier = 2;
+  } else {
+    tier = 1;
+  }
+
+  const tierLabels = ["", "Very Low Local Risk", "Low-Moderate Local Risk", "Moderate Local Risk", "High Local Risk", "Very High Local Risk"];
+  const tagColors = ["low", "low", "low", "mod", "high", "high"];
+
+  const notes = [];
+  if (bedrock) {
+    notes.push(`Property is underlain by the <strong>${escapeHtml(bedrock.unitName)}</strong> (${escapeHtml(bedrock.rockType)}${bedrock.exposure === "E" ? ", exposed/shallow bedrock" : ", mantled/buried"}).`);
+  } else {
+    notes.push("No soluble carbonate or evaporite bedrock formation is mapped directly beneath this parcel.");
+  }
+
+  if (points.length > 0) {
+    notes.push(`<strong>${points.length} documented sinkhole/subsidence incident${points.length === 1 ? "" : "s"}</strong> found within 5 miles (${p1mi} within 1 mile; ${p3mi} within 3 miles). The nearest recorded incident is <strong>${nearest.distanceMiles} miles ${nearest.bearing}</strong>.`);
+  } else {
+    notes.push("Zero documented sinkhole collapse incidents on public geological survey records within 5 miles.");
+  }
+
+  if (flVuln) {
+    notes.push(`Florida Geological Survey subsurface vulnerability model rates this specific parcel as <em>"${flVuln.label.toLowerCase()}"</em>.`);
+  }
+
+  const src = (stateAbbr === "FL"
+    ? "Source: Florida Geological Survey (FGS / FDEP) Subsidence Incident Reports database + Florida GeoPlan Center sinkhole vulnerability model + USGS National Karst Geologic Units layer."
+    : stateAbbr === "PA"
+    ? "Source: Pennsylvania DCNR Geological Survey Karst Features Inventory + USGS National Karst Geologic Units layer."
+    : stateAbbr === "KY"
+    ? "Source: Kentucky Geological Survey (KGS) LiDAR Sinkhole Inventory + USGS National Karst Geologic Units layer."
+    : "Source: USGS National Karst & Soluble Bedrock Geologic Units layer (Open-File Report 2014-1156, contiguous U.S.).") + " Site-specific assessment computed from exact parcel coordinates.";
+
+  return {
+    tier,
+    tierLabel: tierLabels[tier],
+    tag: tagColors[tier],
+    closestSinkhole: nearest,
+    pointsWithin1Mi: p1mi,
+    pointsWithin3Mi: p3mi,
+    pointsWithin5Mi: p5mi,
+    allPoints: points,
+    underlyingBedrock: bedrock,
+    geologyPolygons: polygons,
+    flVulnerability: flVuln,
+    summaryExplanation: notes.join(" "),
+    sourceDescription: src
+  };
+}
+
+function cleanCountyName(s) {
+  return (s || "").toLowerCase().replace(/\(.*?\)/g, " ").replace(/\b(county|parish|borough|census area|municipality|independent city|city and borough)\b/g, " ").replace(/[^a-z]/g, "");
+}
+
+
+function getStormName(title) {
+  const m = (title || "").toUpperCase().match(/\b(?:HURRICANE|TROPICAL STORM|TYPHOON|CYCLONE)\s+([A-Z]{3,})\b/);
+  if (m && !["AND", "THE", "FORCE", "WARNING", "EVACUATION"].includes(m[1])) {
+    return m[1];
+  }
+  if ((title || "").toUpperCase().includes("KATRINA")) return "KATRINA";
+  if ((title || "").toUpperCase().includes("SANDY")) return "SANDY";
+  if ((title || "").toUpperCase().includes("HARVEY")) return "HARVEY";
+  return null;
+}
+
+function deduplicateFemaDisasters(rawList, targetCounty) {
+  const targetC = cleanCountyName(targetCounty);
+
+  // 1. County filter + strictly unique disasterNumber
+  const byDisasterNumber = new Map();
+  for (const item of rawList) {
+    const itemC = cleanCountyName(item.designatedArea);
+    if (targetC && itemC !== targetC && item.designatedArea !== "Statewide") continue;
+    if (!byDisasterNumber.has(item.disasterNumber)) {
+      byDisasterNumber.set(item.disasterNumber, item);
+    }
+  }
+
+  const items = Array.from(byDisasterNumber.values());
+  items.sort((a, b) => new Date(b.declarationDate || b.incidentBeginDate) - new Date(a.declarationDate || a.incidentBeginDate));
+
+  // 2. Event-level grouping: merge duplicate EM (Emergency) with DR (Major Disaster) declarations
+  const mergedEvents = [];
+
+  for (const cur of items) {
+    const curYear = new Date(cur.incidentBeginDate || cur.declarationDate).getFullYear();
+    const curStorm = getStormName(cur.declarationTitle);
+    const curIsCovid = (cur.declarationTitle || "").toUpperCase().includes("COVID") || (cur.incidentType === "Biological" && curYear === 2020);
+    const curDate = new Date(cur.incidentBeginDate || cur.declarationDate).getTime();
+
+    let matchedIdx = -1;
+    for (let i = 0; i < mergedEvents.length; i++) {
+      const ex = mergedEvents[i];
+      const exYear = new Date(ex.incidentBeginDate || ex.declarationDate).getFullYear();
+      const exStorm = getStormName(ex.declarationTitle);
+      const exIsCovid = (ex.declarationTitle || "").toUpperCase().includes("COVID") || (ex.incidentType === "Biological" && exYear === 2020);
+      const exDate = new Date(ex.incidentBeginDate || ex.declarationDate).getTime();
+      const daysDiff = Math.abs(curDate - exDate) / (1000 * 60 * 60 * 24);
+
+      // Match A: Same named storm in same season/year
+      if (curStorm && exStorm && curStorm === exStorm && Math.abs(curYear - exYear) <= 1) {
+        matchedIdx = i;
+        break;
+      }
+
+      // Match B: COVID-19 pandemic
+      if (curIsCovid && exIsCovid) {
+        matchedIdx = i;
+        break;
+      }
+
+      // Match C: Emergency declaration (EM) and Major Disaster (DR), or duplicate EM within 21 days with same event title
+      const oneIsDR = (cur.declarationType === "DR" && ex.declarationType !== "DR") || (ex.declarationType === "DR" && cur.declarationType !== "DR");
+      const bothEM = cur.declarationType !== "DR" && ex.declarationType !== "DR";
+
+      if ((oneIsDR || bothEM) && daysDiff <= 21) {
+        const cleanA = (cur.declarationTitle || "").toUpperCase().replace(/\bSTORMS\b/g, "STORM").replace(/\bFLOODING\b/g, "FLOOD").replace(/[^A-Z]/g, " ").trim();
+        const cleanB = (ex.declarationTitle || "").toUpperCase().replace(/\bSTORMS\b/g, "STORM").replace(/\bFLOODING\b/g, "FLOOD").replace(/[^A-Z]/g, " ").trim();
+        if (cleanA === cleanB || cleanA.includes(cleanB) || cleanB.includes(cleanA)) {
+          matchedIdx = i;
+          break;
+        }
+      }
+    }
+
+    if (matchedIdx === -1) {
+      mergedEvents.push(cur);
+    } else {
+      // Merge: prefer Major Disaster (DR) declaration over Emergency (EM); prefer Hurricane title over Tropical Storm
+      const existing = mergedEvents[matchedIdx];
+      let preferCur = false;
+      if (existing.declarationType !== "DR" && cur.declarationType === "DR") {
+        preferCur = true;
+      } else if (existing.declarationType === cur.declarationType) {
+        if ((cur.declarationTitle || "").includes("HURRICANE") && !(existing.declarationTitle || "").includes("HURRICANE")) {
+          preferCur = true;
+        }
+      }
+      if (preferCur) {
+        mergedEvents[matchedIdx] = cur;
+      }
+    }
+  }
+
+  return mergedEvents;
+}
+
+async function queryOpenFemaDisasters(stateAbbr, county) {
+  if (!stateAbbr) return [];
+  const filter = encodeURIComponent(`state eq '${stateAbbr}' and fyDeclared ge 2000`);
+  const url = `https://www.fema.gov/api/open/v2/DisasterDeclarationsSummaries?$filter=${filter}&$select=disasterNumber,declarationType,declarationDate,incidentBeginDate,incidentType,declarationTitle,designatedArea,fyDeclared&$orderby=declarationDate desc&$top=2000`;
+  const res = await fetchWithTimeout(url, void 0, 7500);
+  if (!res.ok) return [];
+  const d = await res.json();
+  const list = d.DisasterDeclarationsSummaries || [];
+  return deduplicateFemaDisasters(list, county).slice(0, 12);
+}
+
+
+const NRI_TIER_MAP = { "very low": 1, "relatively low": 2, "relatively moderate": 3, "relatively high": 4, "very high": 5 };
+
+function parseNriScore(attr, prefix) {
+  const lbl = (attr[prefix + "_RISKR"] || "").toString().trim();
+  return {
+    ratingLabel: lbl || "Not rated",
+    tier: NRI_TIER_MAP[lbl.toLowerCase()] || null,
+    annualFreq: typeof attr[prefix + "_AFREQ"] === "number" ? attr[prefix + "_AFREQ"] : null
+  };
+}
+
+async function queryFemaNRI(lat, lon) {
+  const url = `https://services.arcgis.com/XG15cJAlne2vxtgt/arcgis/rest/services/National_Risk_Index_Counties/FeatureServer/0/query?geometry=${lon},${lat}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=WFIR_RISKR,WFIR_AFREQ,ERQK_RISKR,ERQK_AFREQ,TRND_RISKR,TRND_AFREQ&returnGeometry=false&f=json`;
+  const res = await fetchWithTimeout(url, void 0, 7500);
+  if (!res.ok) return null;
+  const d = await res.json();
+  if (!d.features?.length) return null;
+  const a = d.features[0].attributes || {};
+  return {
+    wildfire: parseNriScore(a, "WFIR"),
+    earthquake: parseNriScore(a, "ERQK"),
+    tornado: parseNriScore(a, "TRND")
+  };
+}
+
+async function queryEpaSites(lat, lon) {
+  const nplUrl = `https://services.arcgis.com/cJ9YHowT8TU7DUyn/arcgis/rest/services/Superfund_National_Priorities_List_(NPL)_Sites_with_Status_Information/FeatureServer/0/query?geometry=${lon},${lat}&geometryType=esriGeometryPoint&inSR=4326&distance=3&units=esriSRUnit_StatuteMile&spatialRel=esriSpatialRelIntersects&outFields=NAME,City,State,County,NPL_STATUS&returnGeometry=false&f=json`;
+  let npl = [];
+  try {
+    const res = await fetchWithTimeout(nplUrl, void 0, 7500);
+    if (res.ok) {
+      const d = await res.json();
+      npl = (d.features || []).map(f => f.attributes || {});
+    }
+  } catch {}
+
+  let gen = [];
+  let genOk = false;
+  try {
+    const frsUrl = `https://ofmpub.epa.gov/frs_public2/frs_rest_services.get_facilities?latitude83=${lat}&longitude83=${lon}&search_radius=1&output=JSON`;
+    const res = await fetchWithTimeout(frsUrl, void 0, 7500);
+    if (res.ok) {
+      const d = await res.json();
+      if (Array.isArray(d)) gen = d;
+      else if (d?.FRSFacility) gen = d.FRSFacility;
+      else if (d?.Results?.FRSFacility) gen = d.Results.FRSFacility;
+      genOk = true;
+    }
+  } catch {}
+
+  return { superfund: npl, general: gen, generalOk: genOk };
+}
+
+function computeWindExposure(stateAbbr, lat, lon) {
+  const base = STATE_HURRICANE_BASELINE[stateAbbr] || STATE_HURRICANE_BASELINE.DEFAULT;
+  const dist = nearestCoastDistance(lat, lon);
+  if (base <= 1) return { tier: 1, distanceMiles: dist };
+  let tier;
+  if (dist <= 2) tier = 5;
+  else if (dist <= 10) tier = Math.min(5, base + 1);
+  else if (dist <= 30) tier = base;
+  else if (dist <= 75) tier = Math.max(1, base - 1);
+  else tier = Math.max(1, base - 2);
+  return { tier, distanceMiles: dist };
+}
+
+function getWindTierInfo(tier) {
+  const map = {
+    1: { name: "Low exposure", tag: "low" },
+    2: { name: "Low-moderate exposure", tag: "low" },
+    3: { name: "Moderate exposure", tag: "mod" },
+    4: { name: "High exposure", tag: "mod" },
+    5: { name: "Very high exposure", tag: "high" }
+  };
+  return map[tier] || map[1];
+}
+
+const DEDUCTIBLE_FACTORS = { 1: 1.12, 2: 1.0, 3: 0.94, 4: 0.89, 5: 0.85 };
+
+function estimateHomeownersPremium(windTier, valueRatio, mitigated, deductiblePct) {
+  const baseRanges = { 1: [1000, 2000], 2: [1600, 2800], 3: [2200, 4200], 4: [3000, 6000], 5: [4200, 10000] };
+  const [lo, hi] = baseRanges[windTier] || baseRanges[1];
+  const mitF = mitigated ? 0.75 : 1.0;
+  const dedF = DEDUCTIBLE_FACTORS[deductiblePct] || 1.0;
+  return [lo * valueRatio * mitF * dedF, hi * valueRatio * mitF * dedF];
+}
+
+function estimateFloodPremium(floodRisk, valueRatio) {
+  const base = { 1: [250, 650], 2: [400, 900], 3: [600, 1500], 4: [900, 2400], 5: [1800, 5500] };
+  const [lo, hi] = base[floodRisk] || base[1];
+  return [lo * valueRatio, hi * valueRatio];
+}
+
+function disasterLossMultiplier(count) {
+  return count >= 13 ? 1.15 : count >= 7 ? 1.08 : 1.0;
+}
+
+function formatDollars(n) {
+  return "$" + Math.round(n).toLocaleString("en-US");
+}
+
+function escapeHtml(str) {
+  return (str || "").replace(/[&<>"']/g, m => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[m] || m);
+}
+
+function setStatusMessage(msg, isErr = false) {
+  const el = document.getElementById("status-line");
+  if (el) {
+    el.textContent = msg || "";
+    el.classList.toggle("err", isErr);
+  }
+}
+
+function getHomeValueInput() {
+  const raw = (document.getElementById("home-value")?.value || "").replace(/[^0-9.]/g, "");
+  const val = parseFloat(raw);
+  return !val || val <= 0 ? 350000 : Math.min(Math.max(val, 60000), 5000000);
+}
+
+function renderFloodMapSvg(features, centerLat, centerLon, delta, w, h) {
+  const minX = centerLon - delta, maxX = centerLon + delta;
+  const minY = centerLat - delta, maxY = centerLat + delta;
+  const proj = (x, y) => [(x - minX) / (maxX - minX) * w, h - (y - minY) / (maxY - minY) * h];
+
+  let paths = "", labels = "";
+  features.forEach(feat => {
+    const rings = feat.geometry?.rings || [];
+    const zone = feat.attributes?.FLD_ZONE || "";
+    const info = FLOOD_ZONES[normalizeFloodZoneKey(zone, "")] || FLOOD_ZONES.D;
+    const col = { high: "#96382A", mod: "#AD6E28", low: "#3C6E52", unk: "#8b978d" }[info.tag] || "#8b978d";
+
+    rings.forEach(ring => {
+      let minPx = Infinity, maxPx = -Infinity, minPy = Infinity, maxPy = -Infinity, sumX = 0, sumY = 0;
+      const d = ring.map((pt, idx) => {
+        const [px, py] = proj(pt[0], pt[1]);
+        minPx = Math.min(minPx, px); maxPx = Math.max(maxPx, px);
+        minPy = Math.min(minPy, py); maxPy = Math.max(maxPy, py);
+        sumX += px; sumY += py;
+        return (idx === 0 ? "M" : "L") + px.toFixed(1) + "," + py.toFixed(1);
+      }).join(" ") + " Z";
+
+      paths += `<path d="${d}" fill="${col}" fill-opacity="0.48" stroke="${col}" stroke-width="1.2"/>`;
+      if (zone && maxPx - minPx > 24 && maxPy - minPy > 16) {
+        const cx = (sumX / ring.length).toFixed(1);
+        const cy = (sumY / ring.length).toFixed(1);
+        labels += `<text x="${cx}" y="${cy}" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="#182129" stroke="#F8F9F2" stroke-width="3" paint-order="stroke" text-anchor="middle" dominant-baseline="middle">${zone}</text>`;
+      }
+    });
+  });
+
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">${paths}${labels}</svg>`;
+}
+
+function updateFloodMap(lat, lon) {
+  const basemap = document.getElementById("flood-map-basemap");
+  const marker = document.getElementById("flood-map-marker-aerial");
+  const ph = document.getElementById("flood-map-aerial-placeholder");
+  const svgBox = document.getElementById("flood-map-svg-container");
+  const cap = document.getElementById("flood-map-caption");
+  if (!basemap || !marker || !ph || !svgBox || !cap) return;
+
+  basemap.style.display = "none";
+  marker.style.display = "none";
+  svgBox.style.display = "none";
+  ph.style.display = "flex";
+  ph.textContent = "Loading map…";
+
+  const delta = FLOOD_MAP_HALF_BBOX;
+  basemap.onload = () => {
+    basemap.style.display = "block";
+    marker.style.display = "block";
+    ph.style.display = "none";
+  };
+  basemap.onerror = () => {
+    ph.textContent = "Map imagery could not be loaded.";
+  };
+  basemap.src = esriExportAerialUrl(lat, lon, delta, 700, 560, "jpg");
+
+  queryFloodPolygons(lat, lon, delta).then(feats => {
+    if (feats.length) {
+      svgBox.innerHTML = renderFloodMapSvg(feats, lat, lon, delta, 700, 560);
+      svgBox.style.display = "block";
+    }
+    cap.innerHTML = `Aerial imagery (Esri) with FEMA flood zone boundaries. Crosshair pin marks parcel.`;
+  }).catch(() => {
+    cap.innerHTML = `Aerial imagery (Esri). Crosshair pin marks parcel.`;
+  });
+}
+
+function renderSinkholeMapSvg(points, polygons, centerLat, centerLon, delta, w, h) {
+  const minX = centerLon - delta, maxX = centerLon + delta;
+  const minY = centerLat - delta, maxY = centerLat + delta;
+  const proj = (x, y) => [(x - minX) / (maxX - minX) * w, h - (y - minY) / (maxY - minY) * h];
+
+  let body = "";
+  if (polygons?.length) {
+    let pPaths = "";
+    polygons.forEach(feat => {
+      (feat.geometry?.rings || []).forEach(ring => {
+        const d = ring.map((pt, idx) => {
+          const [px, py] = proj(pt[0], pt[1]);
+          return (idx === 0 ? "M" : "L") + px.toFixed(1) + "," + py.toFixed(1);
+        }).join(" ") + " Z";
+        pPaths += `<path d="${d}" fill="#AD6E28" fill-opacity="0.22" stroke="#AD6E28" stroke-width="1.2" stroke-dasharray="3,3" />`;
+      });
+    });
+    body += `<g class="karst-polygons">${pPaths}</g>`;
+  }
+
+  const [cx, cy] = proj(centerLon, centerLat);
+  const rings = [0.5, 1, 3].map(radius => {
+    const latOffset = radius / 69;
+    const [, ringY] = proj(centerLon, centerLat + latOffset);
+    const rPx = Math.abs(cy - ringY);
+    if (rPx > w && rPx > h) return "";
+    return `
+      <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${rPx.toFixed(1)}" fill="none" stroke="#EDF0E6" stroke-opacity="0.45" stroke-width="1" stroke-dasharray="4,4" />
+      <text x="${cx.toFixed(1)}" y="${(cy - rPx + 11).toFixed(1)}" font-family="IBM Plex Mono, monospace" font-size="9" font-weight="500" fill="#F8F9F2" stroke="#182129" stroke-width="2" paint-order="stroke" text-anchor="middle">${radius} mi</text>
+    `;
+  }).join("");
+  body += `<g class="range-rings">${rings}</g>`;
+
+  const dots = points.map((p, idx) => {
+    const [px, py] = proj(p.lon, p.lat);
+    if (px < -20 || px > w + 20 || py < -20 || py > h + 20) return "";
+    const isClose = p.distanceMiles <= 1.0;
+    const col = isClose ? "#DC2626" : "#D97706";
+    const halo = isClose ? "#EF4444" : "#F59E0B";
+    const size = isClose ? 7.0 : 4.8;
+    return `
+      <g class="sinkhole-marker-node" data-idx="${idx}" style="cursor:pointer;" transform="translate(${px.toFixed(1)}, ${py.toFixed(1)})">
+        <circle cx="0" cy="0" r="16" fill="transparent" class="sinkhole-hit-target" />
+        <circle cx="0" cy="0" r="${(size + 4).toFixed(1)}" fill="${halo}" fill-opacity="${isClose ? "0.35" : "0.25"}" class="sinkhole-halo" />
+        <circle cx="0" cy="0" r="${size.toFixed(1)}" fill="${col}" stroke="#FFFFFF" stroke-width="1.8" class="sinkhole-dot" />
+        <circle cx="0" cy="0" r="${isClose ? "2.0" : "1.3"}" fill="#FFFFFF" />
+      </g>
+    `;
+  }).join("");
+  body += `<g class="sinkhole-points">${dots}</g>`;
+
+  body += `
+    <g class="target-parcel-marker" pointer-events="none">
+      <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="16" fill="#1D4ED8" fill-opacity="0.22" />
+      <line x1="${(cx - 16).toFixed(1)}" y1="${cy.toFixed(1)}" x2="${(cx - 7).toFixed(1)}" y2="${cy.toFixed(1)}" stroke="#1D4ED8" stroke-width="2.2" stroke-linecap="round" />
+      <line x1="${(cx + 7).toFixed(1)}" y1="${cy.toFixed(1)}" x2="${(cx + 16).toFixed(1)}" y2="${cy.toFixed(1)}" stroke="#1D4ED8" stroke-width="2.2" stroke-linecap="round" />
+      <line x1="${cx.toFixed(1)}" y1="${(cy - 16).toFixed(1)}" x2="${cx.toFixed(1)}" y2="${(cy - 7).toFixed(1)}" stroke="#1D4ED8" stroke-width="2.2" stroke-linecap="round" />
+      <line x1="${cx.toFixed(1)}" y1="${(cy + 7).toFixed(1)}" x2="${cx.toFixed(1)}" y2="${(cy + 16).toFixed(1)}" stroke="#1D4ED8" stroke-width="2.2" stroke-linecap="round" />
+      <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="7" fill="#1D4ED8" stroke="#FFFFFF" stroke-width="2.5" />
+      <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="2.2" fill="#FFFFFF" />
+    </g>
+  `;
+
+  return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">${body}</svg>`;
+}
+
+function updateSinkholeMap(lat, lon, report) {
+  const basemap = document.getElementById("sinkhole-map-basemap");
+  const marker = document.getElementById("sinkhole-map-marker-property");
+  const ph = document.getElementById("sinkhole-map-placeholder");
+  const svgBox = document.getElementById("sinkhole-map-svg-container");
+  const cap = document.getElementById("sinkhole-map-caption");
+  const tip = document.getElementById("sinkhole-tooltip");
+  if (!basemap || !marker || !ph || !svgBox || !cap) return;
+
+  basemap.style.display = "none";
+  marker.style.display = "none";
+  svgBox.style.display = "none";
+  ph.style.display = "flex";
+  ph.textContent = "Loading location-level sinkhole map…";
+
+  const delta = (currentSinkholeRadius / 69) * 1.15;
+  basemap.crossOrigin = "anonymous";
+  basemap.onload = () => {
+    basemap.style.display = "block";
+    marker.style.display = "block";
+    ph.style.display = "none";
+    svgBox.style.display = "block";
+    if (currentSinkholeBasemapType === "satellite") {
+      const captured = getBase64FromImageElement(basemap);
+      if (captured && report) {
+        report.sinkholeBasemapDataUrl = captured;
+      }
+    }
+  };
+  basemap.onerror = () => {
+    ph.textContent = "Sinkhole map imagery could not be loaded.";
+  };
+
+  const srcUrl = currentSinkholeBasemapType === "topo"
+    ? esriExportTopoUrl(lat, lon, delta, 700, 560)
+    : esriExportAerialUrl(lat, lon, delta, 700, 560, "jpg");
+  basemap.src = srcUrl;
+
+  const pts = report.sinkhole.allPoints;
+  const polys = report.sinkhole.geologyPolygons;
+  svgBox.innerHTML = renderSinkholeMapSvg(pts, polys, lat, lon, delta, 700, 560);
+
+  let pinnedIdx = null;
+  function showTip(p, idx, px, py, isPin = false) {
+    if (!tip || !svgBox) return;
+    const boxRect = svgBox.getBoundingClientRect();
+    if (isPin) pinnedIdx = idx;
+
+    svgBox.querySelectorAll(".sinkhole-marker-node").forEach(node => {
+      const i = parseInt(node.getAttribute("data-idx") || "-1", 10);
+      const h = node.querySelector(".sinkhole-halo");
+      const d = node.querySelector(".sinkhole-dot");
+      if (h && d) {
+        if (i === idx) {
+          h.setAttribute("fill", "#AD6E28");
+          h.setAttribute("fill-opacity", "0.65");
+          d.setAttribute("stroke", "#AD6E28");
+        } else {
+          const pt = pts[i];
+          const isCl = pt ? pt.distanceMiles <= 1 : false;
+          h.setAttribute("fill", isCl ? "#EF4444" : "#F59E0B");
+          h.setAttribute("fill-opacity", isCl ? "0.35" : "0.25");
+          d.setAttribute("fill", isCl ? "#DC2626" : "#D97706");
+          d.setAttribute("stroke", "#FFFFFF");
+        }
+      }
+    });
+
+    let dims = "";
+    if (p.depthFt || p.widthFt) {
+      dims = `<div style="font-family:var(--mono);font-size:11.5px;color:var(--amber);margin-top:4px;">
+        ${p.depthFt ? "Depth: " + p.depthFt + " ft" : ""}
+        ${p.depthFt && p.widthFt ? " &bull; " : ""}
+        ${p.widthFt ? "Width: " + p.widthFt + " ft" : ""}
+      </div>`;
+    }
+
+    let dmg = "";
+    if (p.damage && p.damage !== "Unknown") {
+      dmg = `<div style="font-size:11.5px;margin-top:3px;color:${p.damage.toLowerCase().includes("damage reported") ? "var(--risk-high)" : "var(--risk-low)"};font-weight:500;">
+        ${escapeHtml(p.damage)}
+      </div>`;
+    }
+
+    tip.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px;">
+        <div>
+          <div style="font-family:var(--mono);font-weight:600;font-size:13px;color:var(--ink);">${escapeHtml(p.id)}</div>
+          <div style="font-family:var(--mono);font-size:11.5px;color:${p.distanceMiles <= 1 ? "#DC2626" : "#D97706"};font-weight:600;margin-top:1px;">
+            ${p.distanceMiles} mi ${p.bearing} of property
+          </div>
+        </div>
+        <button class="tip-close-btn" id="tip-close-action" title="Close details">&times;</button>
+      </div>
+      ${p.date ? `<div style="font-size:11.5px;color:var(--ink-soft);margin-bottom:2px;"><span style="color:var(--ink-faint);">Event Date:</span> ${escapeHtml(p.date)}</div>` : ""}
+      ${dims}
+      ${dmg}
+      ${p.comments ? `<div style="font-size:11.5px;color:var(--ink);background:var(--paper);border-left:2px solid var(--amber);padding:5px 8px;margin:7px 0;line-height:1.4;max-height:85px;overflow-y:auto;">${escapeHtml(p.comments)}</div>` : ""}
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:6px;border-top:1px solid var(--line-soft);">
+        <button id="tip-scroll-action" style="background:var(--ink);color:var(--paper-raised);border:none;font-family:var(--mono);font-size:10.5px;padding:3px 9px;cursor:pointer;border-radius:2px;">Highlight in table &darr;</button>
+        <span style="font-size:9.5px;color:var(--ink-faint);">${escapeHtml(p.source || "")}</span>
+      </div>
+    `;
+
+    tip.style.display = "block";
+    const tipW = 280, tipH = tip.offsetHeight || 190;
+    let posX = px + 16;
+    if (posX + tipW > boxRect.width - 12) posX = px - tipW - 16;
+    if (posX < 8) posX = 8;
+    let posY = py - tipH / 2;
+    if (posY < 8) posY = 8;
+    if (posY + tipH > boxRect.height - 8) posY = boxRect.height - tipH - 8;
+    tip.style.left = posX + "px";
+    tip.style.top = posY + "px";
+
+    document.getElementById("tip-close-action")?.addEventListener("click", hideTip);
+    document.getElementById("tip-scroll-action")?.addEventListener("click", () => highlightSinkholeInTable(idx));
+  }
+
+  function hideTip() {
+    pinnedIdx = null;
+    if (tip) tip.style.display = "none";
+    svgBox.querySelectorAll(".sinkhole-marker-node").forEach(node => {
+      const i = parseInt(node.getAttribute("data-idx") || "-1", 10);
+      const h = node.querySelector(".sinkhole-halo");
+      const d = node.querySelector(".sinkhole-dot");
+      if (h && d) {
+        const pt = pts[i];
+        const isCl = pt ? pt.distanceMiles <= 1 : false;
+        h.setAttribute("fill", isCl ? "#EF4444" : "#F59E0B");
+        h.setAttribute("fill-opacity", isCl ? "0.35" : "0.25");
+        d.setAttribute("fill", isCl ? "#DC2626" : "#D97706");
+        d.setAttribute("stroke", "#FFFFFF");
+      }
+    });
+  }
+
+  svgBox.querySelectorAll(".sinkhole-marker-node").forEach(node => {
+    node.addEventListener("click", e => {
+      e.stopPropagation();
+      const idx = parseInt(node.getAttribute("data-idx") || "0", 10);
+      const p = pts[idx];
+      if (!p) return;
+      const rect = svgBox.getBoundingClientRect();
+      showTip(p, idx, e.clientX - rect.left, e.clientY - rect.top, true);
+    });
+    node.addEventListener("mouseenter", e => {
+      if (pinnedIdx !== null) return;
+      const idx = parseInt(node.getAttribute("data-idx") || "0", 10);
+      const p = pts[idx];
+      if (!p) return;
+      const rect = svgBox.getBoundingClientRect();
+      showTip(p, idx, e.clientX - rect.left, e.clientY - rect.top, false);
+    });
+    node.addEventListener("mouseleave", () => {
+      if (pinnedIdx === null && tip) tip.style.display = "none";
+    });
+  });
+
+  const mapBox = document.getElementById("sinkhole-map-box");
+  mapBox?.addEventListener("click", e => {
+    if (!e.target.closest(".sinkhole-marker-node") && !e.target.closest("#sinkhole-tooltip")) hideTip();
+  });
+
+  const countWithin = pts.filter(p => p.distanceMiles <= currentSinkholeRadius).length;
+  cap.innerHTML = `Showing <strong>${countWithin}</strong> documented sinkhole/subsidence feature${countWithin === 1 ? "" : "s"} within ${currentSinkholeRadius} miles. <strong>Click any sinkhole icon</strong> to inspect event details, dimensions, and damage reports.`;
+}
+
+function highlightSinkholeInTable(idx) {
+  const row = document.getElementById("sinkhole-row-" + idx);
+  if (row) {
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+    row.style.backgroundColor = "#F0E1C8";
+    setTimeout(() => { row.style.backgroundColor = ""; }, 2500);
+  }
+}
+
+function selectSinkholeFromTable(idx) {
+  if (!currentReport || !currentReport.sinkhole.allPoints[idx]) return;
+  const box = document.getElementById("sinkhole-map-box");
+  box?.scrollIntoView({ behavior: "smooth", block: "center" });
+  const svgBox = document.getElementById("sinkhole-map-svg-container");
+  const node = svgBox?.querySelector(`.sinkhole-marker-node[data-idx="${idx}"]`);
+  if (node) {
+    node.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  } else {
+    currentSinkholeRadius = 5.0;
+    updateZoomButtons();
+    updateSinkholeMap(currentReport.lat, currentReport.lon, currentReport);
+    setTimeout(() => {
+      const newNode = document.getElementById("sinkhole-map-svg-container")?.querySelector(`.sinkhole-marker-node[data-idx="${idx}"]`);
+      newNode?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    }, 450);
+  }
+  highlightSinkholeInTable(idx);
+}
+
+function updateZoomButtons() {
+  document.querySelectorAll(".sh-zoom-btn").forEach(btn => {
+    const z = parseFloat(btn.getAttribute("data-zoom") || "2");
+    btn.classList.toggle("active", z === currentSinkholeRadius);
+  });
+}
+
+function updateTypeButtons() {
+  document.querySelectorAll(".sh-type-btn").forEach(btn => {
+    const t = btn.getAttribute("data-type") || "satellite";
+    btn.classList.toggle("active", t === currentSinkholeBasemapType);
+  });
+}
+
+
+async function generateReport() {
+  const input = (document.getElementById("address-input")?.value || "").trim();
+  if (!input) {
+    setStatusMessage("Enter a U.S. address to generate a report.", true);
+    return;
+  }
+  const goBtn = document.getElementById("go-btn");
+  if (goBtn) goBtn.disabled = true;
+  setStatusMessage("Locating address via geocoding…");
+
+  try {
+    const geo = await geocodeAddress(input);
+    const lat = parseFloat(geo.lat), lon = parseFloat(geo.lon);
+    const addr = geo.address || {};
+    const stateAbbr = (addr["ISO3166-2-lvl4"] || "").split("-")[1] || stateNameToAbbr(addr.state);
+    const county = addr.county || "";
+
+    setStatusMessage("Querying FEMA Flood Zone map & elevation data…");
+    let flood = null, floodErr = false;
+    try { flood = await queryFloodPoint(lat, lon); } catch { floodErr = true; }
+
+    setStatusMessage("Analyzing location-level sinkhole & karst geology…");
+    let sinkhole, sinkholeErr = false;
+    try {
+      sinkhole = await performSinkholeAssessment(lat, lon, stateAbbr);
+    } catch (e) {
+      console.error("Sinkhole assessment error:", e);
+      sinkholeErr = true;
+      sinkhole = {
+        tier: 1, tierLabel: "Undetermined", tag: "low", closestSinkhole: null,
+        pointsWithin1Mi: 0, pointsWithin3Mi: 0, pointsWithin5Mi: 0, allPoints: [],
+        underlyingBedrock: null, geologyPolygons: [], flVulnerability: null,
+        summaryExplanation: "Location-level sinkhole data could not be retrieved at this time.",
+        sourceDescription: "Geological data temporarily unavailable."
+      };
+    }
+
+    setStatusMessage("Checking FEMA National Risk Index…");
+    let nri = null, nriErr = false;
+    try { nri = await queryFemaNRI(lat, lon); } catch { nriErr = true; }
+
+    setStatusMessage("Pulling historical declared disasters (OpenFEMA)…");
+    let disasters = [], disasterErr = false;
+    try { disasters = await queryOpenFemaDisasters(stateAbbr, county); } catch { disasterErr = true; }
+
+    setStatusMessage("Checking EPA Superfund & regulated facilities…");
+    let epa = null, epaErr = false;
+    try { epa = await queryEpaSites(lat, lon); } catch { epaErr = true; }
+
+    setStatusMessage("Computing wind exposure and insurance estimates…");
+    const wind = computeWindExposure(stateAbbr, lat, lon);
+    const homeVal = getHomeValueInput();
+    const mitigated = document.getElementById("home-mitigated")?.checked ?? false;
+    const deductiblePct = parseInt(document.getElementById("hurricane-deductible")?.value || "2", 10);
+    const zoneKey = flood ? normalizeFloodZoneKey(flood.zone, flood.subtype) : "D";
+    const zoneInfo = FLOOD_ZONES[zoneKey] || FLOOD_ZONES.D;
+
+    if (!userManuallyToggledFlood) {
+      const flCheck = document.getElementById("include-flood");
+      if (flCheck) flCheck.checked = zoneInfo.risk >= 4;
+    }
+    const includeFlood = document.getElementById("include-flood")?.checked ?? false;
+
+    currentReport = {
+      addressRaw: input,
+      displayName: geo.display_name,
+      lat, lon, stateAbbr, county,
+      flood, floodErr, zoneKey, zoneInfo,
+      disasters, disasterErr,
+      windTier: wind.tier,
+      windDistanceMiles: wind.distanceMiles,
+      homeValue: homeVal,
+      mitigated, deductiblePct, includeFlood,
+      wildfire: nri?.wildfire ?? null,
+      wildfireErr: nriErr,
+      earthquake: nri?.earthquake ?? null,
+      earthquakeErr: nriErr,
+      tornado: nri?.tornado ?? null,
+      tornadoErr: nriErr,
+      sinkhole, sinkholeErr,
+      epa, epaErr,
+      generatedAt: new Date()
+    };
+
+    const repEl = document.getElementById("report");
+    if (repEl) repEl.style.display = "block";
+    renderReportUi(currentReport);
+    setStatusMessage("");
+    repEl?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+    prefetchReportMaps(currentReport);
+  } catch (err) {
+    console.error("Report generation failed:", err);
+    setStatusMessage('Could not locate that address. Try adding city and state, e.g. "1200 Ocean Dr, Miami Beach, FL".', true);
+  } finally {
+    if (goBtn) goBtn.disabled = false;
+  }
+}
+
+function renderReportUi(rep) {
+  document.getElementById("rep-addr").textContent = rep.displayName;
+  document.getElementById("rep-meta").innerHTML = `lat/lon ${rep.lat.toFixed(4)}, ${rep.lon.toFixed(4)}<br>generated ${rep.generatedAt.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })}`;
+  document.getElementById("footer-generated").textContent = `Generated ${rep.generatedAt.toLocaleString("en-US")}`;
+
+  const windInfo = getWindTierInfo(rep.windTier);
+  const ratio = Math.min(Math.max(rep.homeValue / 350000, 0.5), 3.0);
+  const [hLo, hHi] = estimateHomeownersPremium(rep.windTier, ratio, rep.mitigated, rep.deductiblePct);
+  const [fLo, fHi] = estimateFloodPremium(rep.zoneInfo.risk, ratio * disasterLossMultiplier(rep.disasters.length));
+  const effFLo = rep.includeFlood ? fLo : 0;
+  const effFHi = rep.includeFlood ? fHi : 0;
+  const insLabel = rep.includeFlood ? "Est. combined annual insurance" : "Est. homeowners-only annual insurance";
+
+  const strip = document.getElementById("summary-strip");
+  if (strip) {
+    strip.innerHTML = `
+      <div class="cell">
+        <div class="figure">${rep.floodErr ? "N/A" : rep.zoneKey}</div>
+        <div class="label">FEMA flood zone</div>
+        <div class="tag ${rep.floodErr ? "unk" : rep.zoneInfo.tag}">${rep.floodErr ? "unavailable" : rep.zoneInfo.tag + " risk"}</div>
+      </div>
+      <div class="cell">
+        <div class="figure">Tier ${rep.windTier}/5</div>
+        <div class="label">Hurricane wind exposure</div>
+        <div class="tag ${windInfo.tag}">${windInfo.name.toLowerCase()}</div>
+      </div>
+      <div class="cell">
+        <div class="figure">Tier ${rep.sinkhole.tier}/5</div>
+        <div class="label">Sinkhole risk (location-level)</div>
+        <div class="tag ${rep.sinkhole.tag}">${rep.sinkhole.tierLabel.toLowerCase()}</div>
+      </div>
+      <div class="cell">
+        <div class="figure">${formatDollars(hLo + effFLo)}–${formatDollars(hHi + effFHi)}</div>
+        <div class="label">${insLabel}</div>
+      </div>
+    `;
+  }
+
+  // 01 Flood
+  document.getElementById("flood-zone-name").textContent = rep.floodErr ? "Flood zone data unavailable" : rep.zoneInfo.name;
+  document.getElementById("flood-zone-desc").textContent = rep.floodErr ? "The FEMA National Flood Hazard Layer service could not be reached." : rep.zoneInfo.desc;
+  document.getElementById("flood-zone-code").textContent = rep.floodErr ? "—" : rep.zoneKey;
+  document.getElementById("flood-bfe").textContent = !rep.floodErr && rep.flood?.bfe ? `${rep.flood.bfe} ft (NAVD88)` : "Not on record";
+  document.getElementById("flood-coords").textContent = `${rep.lat.toFixed(5)}, ${rep.lon.toFixed(5)}`;
+  document.getElementById("flood-note").textContent = rep.floodErr ? "" : "Source: FEMA National Flood Hazard Layer (NFHL) / Esri Living Atlas. Screening lookup, not an official LOMA.";
+  updateFloodMap(rep.lat, rep.lon);
+
+  // 02 Wind
+  document.getElementById("wind-tier-name").textContent = `${windInfo.name} — Tier ${rep.windTier} of 5`;
+  document.getElementById("wind-desc").textContent = (STATE_HURRICANE_BASELINE[rep.stateAbbr] || 1) <= 1
+    ? "This state has little to no hurricane climatology, so coastal distance was not used as a primary wind-exposure factor."
+    : `At roughly ${rep.windDistanceMiles} miles from the nearest coastline, wind exposure is calibrated against regional hurricane landfall frequency.`;
+  document.getElementById("wind-distance").textContent = (STATE_HURRICANE_BASELINE[rep.stateAbbr] || 1) <= 1 ? "Not applicable" : `${rep.windDistanceMiles} mi`;
+
+  const barCols = ["#3C6E52","#6E8F52","#AD6E28","#C4762B","#96382A"];
+  document.getElementById("wind-bar").innerHTML = barCols.map((c, i) => `<span style="background:${i < rep.windTier ? c : "var(--line-soft)"}"></span>`).join("");
+  document.getElementById("wind-marker").innerHTML = `<div class="marker" style="left:${(rep.windTier - 0.5) / 5 * 100}%">Tier ${rep.windTier}</div>`;
+
+  // 03-05 NRI hazards
+  renderNriBlock("wildfire", rep.wildfire, rep.wildfireErr, "Wildfire", "not a parcel-specific vegetation inspection.");
+  renderNriBlock("earthquake", rep.earthquake, rep.earthquakeErr, "Earthquake", "not a site-specific soil or fault study.");
+  renderNriBlock("tornado", rep.tornado, rep.tornadoErr, "Tornado", "not a structure-specific wind-load study.");
+
+  // 06 Sinkhole
+  renderSinkholeUi(rep);
+
+  // 07 Disasters (Deduplicated Historical Loss Events)
+  const dIntro = document.getElementById("disaster-intro");
+  const dTl = document.getElementById("disaster-timeline");
+  if (dIntro && dTl) {
+    dIntro.textContent = rep.disasterErr
+      ? "Disaster history could not be retrieved right now."
+      : rep.county
+      ? `Federally declared disasters affecting ${rep.county}, ${rep.stateAbbr}, since 2000:`
+      : "Federally declared disasters affecting this county since 2000:";
+    dTl.innerHTML = rep.disasters.length
+      ? rep.disasters.map(d => `
+        <div class="tl-item">
+          <div class="yr">${new Date(d.declarationDate || d.incidentBeginDate).getFullYear()}</div>
+          <div class="ttl">${escapeHtml(d.incidentType || "Disaster")}</div>
+          <div class="sub">${escapeHtml(d.declarationTitle || "")}</div>
+        </div>
+      `).join("")
+      : '<p class="no-events">No federally declared disasters found for this county since 2000.</p>';
+  }
+
+  // 08 EPA
+  const epaIntro = document.getElementById("epa-intro");
+  const epaList = document.getElementById("epa-list");
+  if (epaIntro && epaList) {
+    if (rep.epaErr) {
+      epaIntro.textContent = "EPA site data could not be retrieved right now.";
+      epaList.innerHTML = "";
+    } else {
+      const nplCount = rep.epa?.superfund?.length || 0;
+      const genCount = rep.epa?.general?.length || 0;
+      epaIntro.textContent = `${nplCount} Superfund (NPL) site${nplCount === 1 ? "" : "s"} found within 3 miles, and ${genCount} other EPA-regulated facility records within 1 mile:`;
+      const items = [];
+      (rep.epa?.superfund || []).forEach(s => {
+        items.push(`<div class="tl-item"><div class="yr" style="color:var(--risk-high);">NPL</div><div class="ttl">${escapeHtml(s.NAME || "Superfund site")}</div><div class="sub">${escapeHtml(s.City || "")}, ${escapeHtml(s.State || "")} — Superfund NPL site (${escapeHtml(s.NPL_STATUS || "Listed")})</div></div>`);
+      });
+      (rep.epa?.general || []).slice(0, 6).forEach(g => {
+        items.push(`<div class="tl-item"><div class="yr">•</div><div class="ttl">${escapeHtml(g.FacilityName || "Regulated Facility")}</div><div class="sub">${escapeHtml(g.CityName || "")}, ${escapeHtml(g.StateAbbr || "")}</div></div>`);
+      });
+      epaList.innerHTML = items.length ? items.join("") : '<p class="no-events">No EPA facilities found in immediate vicinity.</p>';
+    }
+  }
+
+  // 09 Insurance
+  document.getElementById("ins-homeval-echo").textContent = formatDollars(rep.homeValue);
+  document.getElementById("ins-deductible-echo").textContent = `${rep.deductiblePct}%`;
+  const dedDollars = Math.round(rep.homeValue * (rep.deductiblePct / 100) / 100) * 100;
+  document.getElementById("ins-deductible-dollars").textContent = formatDollars(dedDollars);
+  document.getElementById("ins-home").textContent = `${formatDollars(hLo)} – ${formatDollars(hHi)}`;
+  document.getElementById("ins-flood").textContent = rep.includeFlood ? `${formatDollars(fLo)} – ${formatDollars(fHi)}` : "Not included";
+  document.getElementById("ins-total").textContent = `${formatDollars(hLo + effFLo)} – ${formatDollars(hHi + effFHi)} / yr${rep.includeFlood ? "" : " (homeowners only)"}`;
+
+  const floodLender = document.getElementById("flood-lender-note");
+  if (floodLender) {
+    if (!rep.includeFlood && !rep.floodErr && rep.zoneInfo.risk >= 4) {
+      floodLender.style.display = "block";
+      floodLender.textContent = `This property sits in a high-risk flood zone (${rep.zoneKey}). Lenders typically mandate flood insurance for federally backed mortgages.`;
+    } else {
+      floodLender.style.display = "none";
+    }
+  }
+}
+
+function renderNriBlock(hazard, data, isErr, label, subtext) {
+  const nameEl = document.getElementById(`${hazard}-tier-name`);
+  const descEl = document.getElementById(`${hazard}-desc`);
+  const barEl = document.getElementById(`${hazard}-bar`);
+  const markerEl = document.getElementById(`${hazard}-marker`);
+  const cols = ["#3C6E52","#6E8F52","#AD6E28","#C4762B","#96382A"];
+
+  if (isErr || !data) {
+    if (nameEl) nameEl.textContent = `${label} data unavailable`;
+    if (descEl) descEl.textContent = "FEMA National Risk Index service could not be reached.";
+    if (barEl) barEl.innerHTML = cols.map(() => '<span style="background:var(--line-soft)"></span>').join("");
+    if (markerEl) markerEl.innerHTML = "";
+  } else {
+    const t = data.tier || 1;
+    if (nameEl) nameEl.textContent = `${data.ratingLabel} — Tier ${t} of 5`;
+    if (descEl) descEl.textContent = `FEMA rates this county's ${label.toLowerCase()} exposure as "${data.ratingLabel.toLowerCase()}." County-wide planning figure, ${subtext}`;
+    if (barEl) barEl.innerHTML = cols.map((c, i) => `<span style="background:${i < t ? c : "var(--line-soft)"}"></span>`).join("");
+    if (markerEl) markerEl.innerHTML = `<div class="marker" style="left:${(t - 0.5) / 5 * 100}%">Tier ${t}</div>`;
+  }
+}
+
+function renderSinkholeUi(rep) {
+  const sh = rep.sinkhole;
+  document.getElementById("sinkhole-tier-name").textContent = `${sh.tierLabel} — Tier ${sh.tier} of 5 (Location-Level)`;
+  document.getElementById("sinkhole-desc").innerHTML = sh.summaryExplanation;
+
+  const cols = ["#3C6E52","#6E8F52","#AD6E28","#C4762B","#96382A"];
+  document.getElementById("sinkhole-bar").innerHTML = cols.map((c, i) => `<span style="background:${i < sh.tier ? c : "var(--line-soft)"}"></span>`).join("");
+  document.getElementById("sinkhole-marker").innerHTML = `<div class="marker" style="left:${(sh.tier - 0.5) / 5 * 100}%">Tier ${sh.tier}</div>`;
+  document.getElementById("sinkhole-note").textContent = sh.sourceDescription;
+
+  const grid = document.getElementById("sinkhole-metrics-grid");
+  if (grid) {
+    const nearest = sh.closestSinkhole ? `${sh.closestSinkhole.distanceMiles} mi ${sh.closestSinkhole.bearing}` : "None within 5 mi";
+    const rockUnit = sh.underlyingBedrock ? sh.underlyingBedrock.unitName : "Non-karst rock / unmapped";
+    const rockType = sh.underlyingBedrock ? `${sh.underlyingBedrock.rockType} (${sh.underlyingBedrock.exposure === "E" ? "Surface/shallow" : "Buried/covered"})` : "Low dissolution susceptibility";
+    grid.innerHTML = `
+      <div class="datum"><div class="k">Nearest documented sinkhole</div><div class="v">${nearest}</div></div>
+      <div class="datum"><div class="k">Incidents within 1 mile</div><div class="v">${sh.pointsWithin1Mi}</div></div>
+      <div class="datum"><div class="k">Incidents within 3 miles</div><div class="v">${sh.pointsWithin3Mi}</div></div>
+      <div class="datum"><div class="k">Underlying formation</div><div class="v" style="font-size:16px;">${escapeHtml(rockUnit)}</div></div>
+      <div class="datum"><div class="k">Rock lithology & exposure</div><div class="v" style="font-size:16px;">${escapeHtml(rockType)}</div></div>
+    `;
+  }
+
+  updateSinkholeMap(rep.lat, rep.lon, rep);
+
+  const tBody = document.getElementById("sinkhole-incidents-list");
+  const tBox = document.getElementById("sinkhole-incidents-container");
+  if (tBody && tBox) {
+    if (!sh.allPoints.length) {
+      tBox.style.display = "none";
+    } else {
+      tBox.style.display = "block";
+      tBody.innerHTML = sh.allPoints.slice(0, 10).map((p, idx) => `
+        <tr id="sinkhole-row-${idx}" style="border-bottom:1px solid var(--line-soft);transition:background .3s ease;cursor:pointer;" title="Click to view on sinkhole map">
+          <td style="padding:10px 8px;font-family:var(--mono);font-size:13px;font-weight:600;color:var(--ink);">${escapeHtml(p.id)}</td>
+          <td style="padding:10px 8px;font-family:var(--mono);font-size:13px;font-weight:600;color:${p.distanceMiles <= 1 ? "#DC2626" : "#D97706"};">${p.distanceMiles} mi ${p.bearing}</td>
+          <td style="padding:10px 8px;font-size:12.5px;color:var(--ink-soft);">${p.date || "Historic / unrecorded"}</td>
+          <td style="padding:10px 8px;font-family:var(--mono);font-size:12px;">${p.depthFt ? p.depthFt + " ft depth" : "—"}</td>
+          <td style="padding:10px 8px;font-size:12px;color:var(--ink-soft);">${escapeHtml(p.comments || p.verified || "Recorded subsidence event")}</td>
+        </tr>
+      `).join("");
+
+      sh.allPoints.slice(0, 10).forEach((p, idx) => {
+        document.getElementById(`sinkhole-row-${idx}`)?.addEventListener("click", () => selectSinkholeFromTable(idx));
+      });
+    }
+  }
+}
+
+
+function hexToRgb(hex) {
+  const h = hex.replace("#", "");
+  return {
+    r: parseInt(h.substring(0, 2), 16),
+    g: parseInt(h.substring(2, 4), 16),
+    b: parseInt(h.substring(4, 6), 16)
+  };
+}
+
+function blendColorWithWhite(hex, alpha) {
+  const rgb = hexToRgb(hex);
+  return {
+    r: Math.round(rgb.r * alpha + 255 * (1 - alpha)),
+    g: Math.round(rgb.g * alpha + 255 * (1 - alpha)),
+    b: Math.round(rgb.b * alpha + 255 * (1 - alpha))
+  };
+}
+
+function drawPolygonFilled(doc, points, rgb) {
+  if (points.length < 3) return;
+  const deltas = [];
+  for (let i = 1; i < points.length; i++) {
+    deltas.push([points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]]);
+  }
+  doc.setFillColor(rgb.r, rgb.g, rgb.b);
+  doc.lines(deltas, points[0][0], points[0][1], [1, 1], "F", true);
+}
+
+function drawPolygonFilledOnly(doc, points) {
+  if (points.length < 3) return;
+  const deltas = [];
+  for (let i = 1; i < points.length; i++) {
+    deltas.push([points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]]);
+  }
+  doc.lines(deltas, points[0][0], points[0][1], [1, 1], "F", true);
+}
+
+function drawPolygonOutline(doc, points) {
+  if (points.length < 2) return;
+  const deltas = [];
+  for (let i = 1; i < points.length; i++) {
+    deltas.push([points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]]);
+  }
+  doc.lines(deltas, points[0][0], points[0][1], [1, 1], "D", true);
+}
+
+async function downloadPdfReport() {
+  if (!currentReport) return;
+  const rep = currentReport;
+  const pdfBtn = document.getElementById("pdf-btn");
+  if (pdfBtn) {
+    pdfBtn.disabled = true;
+    pdfBtn.textContent = "Preparing PDF…";
+  }
+
+  try {
+    const [floodImg, sinkholeImg] = await Promise.all([
+      getOrFetchFloodAerialDataUrl(rep),
+      getOrFetchSinkholeAerialDataUrl(rep)
+    ]);
+
+    const jsPdfLib = window.jspdf?.jsPDF || window.jsPDF;
+    if (!jsPdfLib) throw new Error("jsPDF library not available.");
+
+    const doc = new jsPdfLib({ unit: "pt", format: "letter" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 48;
+    let y = 48;
+
+    const checkPageBreak = neededPt => {
+      if (y + neededPt > 745) {
+        doc.addPage();
+        y = 48;
+      }
+    };
+
+    const addSectionHeader = (text, size = 13) => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(size);
+      doc.setTextColor(24, 33, 41);
+      checkPageBreak(size + 10);
+      doc.text(text, margin, y);
+      y += size + 8;
+    };
+
+    const addParagraph = (text, size = 10) => {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(size);
+      doc.setTextColor(70, 80, 86);
+      const lines = doc.splitTextToSize(text, pageWidth - margin * 2);
+      checkPageBreak(lines.length * (size * 1.35));
+      doc.text(lines, margin, y);
+      y += lines.length * (size * 1.35) + 6;
+    };
+
+    const addDivider = () => {
+      doc.setDrawColor(200, 205, 190);
+      doc.setLineWidth(0.8);
+      doc.line(margin, y, pageWidth - margin, y);
+      y += 14;
+    };
+
+    const addDataKeyVal = (label, val, xPos) => {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(140, 150, 140);
+      doc.text(label, xPos, y);
+      doc.setFont("courier", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(24, 33, 41);
+      doc.text(String(val), xPos, y + 14);
+    };
+
+    const addHazardBar = tier => {
+      const cols = ["#3C6E52","#6E8F52","#AD6E28","#C4762B","#96382A"];
+      const totalW = pageWidth - margin * 2;
+      const barH = 8, gap = 1.2;
+      const segmentW = totalW / 5;
+      const t = Math.max(1, Math.min(5, tier || 1));
+
+      checkPageBreak(32);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(24, 33, 41);
+      doc.text(`Tier ${t}`, margin + (t - 0.5) * segmentW, y, { align: "center" });
+      y += 7;
+
+      for (let i = 0; i < 5; i++) {
+        const segX = margin + i * segmentW;
+        const rgb = hexToRgb(i < t ? cols[i] : "#DBDFD2");
+        doc.setFillColor(rgb.r, rgb.g, rgb.b);
+        doc.rect(segX, y, segmentW - gap, barH, "F");
+      }
+      y += barH + 9;
+
+      const labels = ["Very low", "Low", "Moderate", "High", "Very high"];
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(139, 151, 141);
+      labels.forEach((lbl, i) => {
+        if (i === 0) doc.text(lbl, margin, y, { align: "left" });
+        else if (i === 4) doc.text(lbl, margin + totalW, y, { align: "right" });
+        else doc.text(lbl, margin + (i + 0.5) * segmentW, y, { align: "center" });
+      });
+      y += 14;
+    };
+
+    // Header
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
+    doc.setTextColor(24, 33, 41);
+    doc.text("Groundtruth — Property Hazard Report", margin, y);
+    y += 24;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    doc.setTextColor(70, 80, 86);
+    const addrLines = doc.splitTextToSize(rep.displayName, pageWidth - margin * 2);
+    doc.text(addrLines, margin, y);
+    y += addrLines.length * 14 + 4;
+
+    doc.setFontSize(8.5);
+    doc.setTextColor(140, 150, 140);
+    doc.text(`Generated ${rep.generatedAt.toLocaleString("en-US")}   |   lat/lon ${rep.lat.toFixed(4)}, ${rep.lon.toFixed(4)}`, margin, y);
+    y += 16;
+
+    // Summary strip boxes
+    const ratio = Math.min(Math.max(rep.homeValue / 350000, 0.5), 3.0);
+    const windInfo = getWindTierInfo(rep.windTier);
+    const [hLo, hHi] = estimateHomeownersPremium(rep.windTier, ratio, rep.mitigated, rep.deductiblePct);
+    const [fLo, fHi] = estimateFloodPremium(rep.zoneInfo.risk, ratio * disasterLossMultiplier(rep.disasters.length));
+    const effFLo = rep.includeFlood ? fLo : 0;
+    const effFHi = rep.includeFlood ? fHi : 0;
+
+    checkPageBreak(64);
+    const cellW = (pageWidth - margin * 2 - 18) / 4;
+    const cellH = 50;
+    const stripY = y;
+    const cells = [
+      { val: rep.floodErr ? "N/A" : rep.zoneKey, label: "FEMA flood zone", tag: rep.floodErr ? "unavailable" : rep.zoneInfo.tag + " risk", tagBg: rep.zoneInfo.tag === "high" ? "#F1D9D2" : rep.zoneInfo.tag === "mod" ? "#F0E1C8" : "#D6E7DB", tagColor: rep.zoneInfo.tag === "high" ? "#96382A" : rep.zoneInfo.tag === "mod" ? "#AD6E28" : "#3C6E52" },
+      { val: `Tier ${rep.windTier}/5`, label: "Hurricane exposure", tag: windInfo.name.toLowerCase(), tagBg: windInfo.tag === "high" ? "#F1D9D2" : windInfo.tag === "mod" ? "#F0E1C8" : "#D6E7DB", tagColor: windInfo.tag === "high" ? "#96382A" : windInfo.tag === "mod" ? "#AD6E28" : "#3C6E52" },
+      { val: `Tier ${rep.sinkhole.tier}/5`, label: "Sinkhole risk (local)", tag: rep.sinkhole.tierLabel.toLowerCase(), tagBg: rep.sinkhole.tag === "high" ? "#F1D9D2" : rep.sinkhole.tag === "mod" ? "#F0E1C8" : "#D6E7DB", tagColor: rep.sinkhole.tag === "high" ? "#96382A" : rep.sinkhole.tag === "mod" ? "#AD6E28" : "#3C6E52" },
+      { val: `${formatDollars(hLo + effFLo)}–${formatDollars(hHi + effFHi)}`, label: rep.includeFlood ? "Est. combined ins." : "Est. home-only ins.", tag: "annual est.", tagBg: "#DBDFD2", tagColor: "#4C5A62" }
+    ];
+
+    cells.forEach((c, idx) => {
+      const cx = margin + idx * (cellW + 6);
+      doc.setFillColor(248, 249, 242);
+      doc.setDrawColor(201, 207, 192);
+      doc.setLineWidth(0.8);
+      doc.rect(cx, stripY, cellW, cellH, "FD");
+
+      doc.setFont("courier", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(24, 33, 41);
+      doc.text(c.val, cx + 7, stripY + 16);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(76, 90, 98);
+      doc.text(c.label, cx + 7, stripY + 28);
+
+      const bgRgb = hexToRgb(c.tagBg);
+      const textRgb = hexToRgb(c.tagColor);
+      doc.setFillColor(bgRgb.r, bgRgb.g, bgRgb.b);
+      const tagW = doc.getTextWidth(c.tag) * 0.95 + 8;
+      doc.roundedRect(cx + 7, stripY + 34, tagW, 11, 2, 2, "F");
+      doc.setTextColor(textRgb.r, textRgb.g, textRgb.b);
+      doc.setFont("courier", "bold");
+      doc.setFontSize(6.5);
+      doc.text(c.tag, cx + 11, stripY + 42);
+    });
+
+    y = stripY + cellH + 18;
+    addDivider();
+
+    // 01 Flood
+    addSectionHeader("1. FEMA Flood Zone");
+    addParagraph(rep.floodErr ? "Flood zone service unavailable." : rep.zoneInfo.name);
+    if (!rep.floodErr) addParagraph(rep.zoneInfo.desc);
+    checkPageBreak(40);
+    addDataKeyVal("ZONE", rep.floodErr ? "—" : rep.zoneKey, margin);
+    addDataKeyVal("BASE FLOOD ELEV.", !rep.floodErr && rep.flood?.bfe ? `${rep.flood.bfe} ft` : "Not on record", margin + 160);
+    addDataKeyVal("COORDINATES", `${rep.lat.toFixed(5)}, ${rep.lon.toFixed(5)}`, margin + 320);
+    y += 34;
+
+    // Draw Flood Map in PDF
+    if (floodImg || rep.mapZoneFeatures?.length) {
+      try {
+        const mapW = pageWidth - margin * 2;
+        const mapH = mapW * (480 / 640);
+        checkPageBreak(mapH + 20);
+
+        if (floodImg) {
+          const fmt = detectImageFormat(floodImg);
+          doc.addImage(floodImg, fmt, margin, y, mapW, mapH);
+        } else {
+          doc.setFillColor(235, 238, 230);
+          doc.rect(margin, y, mapW, mapH, "F");
+        }
+
+        const delta = FLOOD_MAP_HALF_BBOX;
+        const minX = rep.lon - delta, maxX = rep.lon + delta;
+        const minY = rep.lat - delta, maxY = rep.lat + delta;
+        const mapTopY = y;
+        const proj = (px, py) => [margin + (px - minX) / (maxX - minX) * mapW, mapTopY + mapH - (py - minY) / (maxY - minY) * mapH];
+
+        doc.saveGraphicsState();
+        doc.rect(margin, mapTopY, mapW, mapH, null);
+        doc.clip();
+        doc.discardPath();
+
+        // Overlay flood zones
+        (rep.mapZoneFeatures || []).forEach(feat => {
+          const rings = feat.geometry?.rings || [];
+          const zone = (feat.attributes?.FLD_ZONE || "").trim();
+          const info = FLOOD_ZONES[normalizeFloodZoneKey(zone, "")] || FLOOD_ZONES.D;
+          const col = { high: "#96382A", mod: "#AD6E28", low: "#3C6E52", unk: "#8b978d" }[info.tag] || "#8b978d";
+          const strokeRgb = hexToRgb(col);
+          rings.forEach(ring => {
+            const pts = ring.map(pt => proj(pt[0], pt[1]));
+            if (pts.length < 3) return;
+            try {
+              if (typeof doc.GState === "function") {
+                const gs = new doc.GState({ opacity: 0.32 });
+                doc.saveGraphicsState();
+                doc.setGState(gs);
+                doc.setFillColor(strokeRgb.r, strokeRgb.g, strokeRgb.b);
+                drawPolygonFilledOnly(doc, pts);
+                doc.restoreGraphicsState();
+              }
+            } catch (e) {}
+            doc.setDrawColor(strokeRgb.r, strokeRgb.g, strokeRgb.b);
+            doc.setLineWidth(0.9);
+            drawPolygonOutline(doc, pts);
+          });
+        });
+
+        // Target parcel pin
+        const [pinX, pinY] = proj(rep.lon, rep.lat);
+        doc.setFillColor(29, 78, 216);
+        doc.circle(pinX, pinY, 6, "F");
+        doc.setFillColor(248, 249, 242);
+        doc.circle(pinX, pinY, 3.8, "F");
+        doc.setFillColor(29, 78, 216);
+        doc.circle(pinX, pinY, 2.2, "F");
+        doc.setDrawColor(29, 78, 216);
+        doc.setLineWidth(1.2);
+        doc.line(pinX - 10, pinY, pinX - 5, pinY);
+        doc.line(pinX + 5, pinY, pinX + 10, pinY);
+        doc.line(pinX, pinY - 10, pinX, pinY - 5);
+        doc.line(pinX, pinY + 5, pinX, pinY + 10);
+
+        if (!rep.floodErr && rep.zoneKey) {
+          const badgeText = `Parcel Zone: ${rep.zoneKey}`;
+          const badgeW = doc.getTextWidth(badgeText) * 0.9 + 10;
+          doc.setFillColor(29, 78, 216);
+          doc.roundedRect(pinX - badgeW / 2, pinY - 19, badgeW, 11, 2, 2, "F");
+          doc.setFont("courier", "bold");
+          doc.setFontSize(6.5);
+          doc.setTextColor(248, 249, 242);
+          doc.text(badgeText, pinX, pinY - 11, { align: "center" });
+        }
+
+        // Flood zone text labels on polygons
+        (rep.mapZoneFeatures || []).forEach(feat => {
+          const rings = feat.geometry?.rings || [];
+          const zone = (feat.attributes?.FLD_ZONE || "").trim();
+          if (!zone) return;
+          rings.forEach(ring => {
+            const pts = ring.map(pt => proj(pt[0], pt[1]));
+            let minPx = Infinity, maxPx = -Infinity, minPy = Infinity, maxPy = -Infinity, sumX = 0, sumY = 0;
+            pts.forEach(([px, py]) => {
+              minPx = Math.min(minPx, px); maxPx = Math.max(maxPx, px);
+              minPy = Math.min(minPy, py); maxPy = Math.max(maxPy, py);
+              sumX += px; sumY += py;
+            });
+            if (maxPx - minPx > 22 && maxPy - minPy > 14) {
+              const cx = sumX / pts.length;
+              const cy = sumY / pts.length;
+              const badgeW = Math.max(zone.length * 7.5 + 10, 24);
+              const badgeH = 13;
+              doc.setFillColor(248, 249, 242);
+              doc.setDrawColor(24, 33, 41);
+              doc.setLineWidth(0.8);
+              doc.roundedRect(cx - badgeW / 2, cy - badgeH / 2, badgeW, badgeH, 2, 2, "FD");
+              doc.setFont("courier", "bold");
+              doc.setFontSize(8.5);
+              doc.setTextColor(24, 33, 41);
+              doc.text(zone, cx, cy + 3, { align: "center" });
+            }
+          });
+        });
+
+        // Flood Map Legend overlay
+        doc.setFillColor(248, 249, 242);
+        doc.setDrawColor(201, 207, 192);
+        doc.setLineWidth(0.8);
+        const fLegW = 250, fLegH = 38;
+        const fLegX = margin + mapW - fLegW - 8;
+        const fLegY = mapTopY + mapH - fLegH - 8;
+        doc.roundedRect(fLegX, fLegY, fLegW, fLegH, 3, 3, "FD");
+
+        doc.setFillColor(29, 78, 216);
+        doc.circle(fLegX + 10, fLegY + 11, 3.2, "F");
+        doc.setFillColor(255, 255, 255);
+        doc.circle(fLegX + 10, fLegY + 11, 1.4, "F");
+        doc.setFillColor(29, 78, 216);
+        doc.circle(fLegX + 10, fLegY + 11, 0.7, "F");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7);
+        doc.setTextColor(29, 78, 216);
+        doc.text("Target Parcel", fLegX + 18, fLegY + 13);
+
+        doc.setFillColor(150, 56, 42);
+        doc.setDrawColor(150, 56, 42);
+        doc.rect(fLegX + 116, fLegY + 7, 8, 8, "FD");
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(24, 33, 41);
+        doc.text("High-Risk Flood Zone (AE/VE)", fLegX + 128, fLegY + 13);
+
+        doc.setFillColor(173, 110, 40);
+        doc.setDrawColor(173, 110, 40);
+        doc.rect(fLegX + 6, fLegY + 22, 8, 8, "FD");
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(24, 33, 41);
+        doc.text("0.2% Annual Chance (X500)", fLegX + 18, fLegY + 28);
+
+        doc.setFillColor(60, 110, 82);
+        doc.setDrawColor(60, 110, 82);
+        doc.rect(fLegX + 116, fLegY + 22, 8, 8, "FD");
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(7);
+        doc.setTextColor(24, 33, 41);
+        doc.text("Minimal Risk (Zone X)", fLegX + 128, fLegY + 28);
+
+        doc.restoreGraphicsState();
+        y += mapH + 8;
+        addParagraph("Aerial imagery (Esri) with FEMA flood zone boundaries. Crosshair pin marks parcel.", 8.5);
+      } catch (err) {
+        console.warn("Flood map drawing error in PDF:", err);
+      }
+    }
+    addDivider();
+
+    // 02 Wind
+    addSectionHeader("2. Hurricane / Wind Exposure");
+    addParagraph(`${windInfo.name} — Tier ${rep.windTier} of 5`);
+    addHazardBar(rep.windTier);
+    addDivider();
+
+    // 03-05 NRI Hazards
+    const addNriSection = (num, title, data, err) => {
+      addSectionHeader(`${num}. ${title} Risk`);
+      if (err || !data) {
+        addParagraph("FEMA National Risk Index data unavailable for this county.");
+      } else {
+        const t = data.tier || 1;
+        addParagraph(`${data.ratingLabel} — Tier ${t} of 5`);
+        addParagraph(`FEMA rates this county's ${title.toLowerCase()} risk as "${data.ratingLabel.toLowerCase()}." County-wide planning figure, not site-specific.`, 8.5);
+        addHazardBar(t);
+      }
+      addDivider();
+    };
+
+    addNriSection("3", "Wildfire", rep.wildfire, rep.wildfireErr);
+    addNriSection("4", "Earthquake", rep.earthquake, rep.earthquakeErr);
+    addNriSection("5", "Tornado", rep.tornado, rep.tornadoErr);
+
+    // 06 SINKHOLE RISK & LOCATION-LEVEL MAP
+    addSectionHeader("6. Sinkhole Risk & Karst Geology (Location-Level)");
+    const sh = rep.sinkhole;
+    addParagraph(`${sh.tierLabel} — Tier ${sh.tier} of 5 (Location-Level Assessment)`);
+    addParagraph(sh.summaryExplanation.replace(/<[^>]*>/g, ""));
+    addHazardBar(sh.tier);
+
+    checkPageBreak(42);
+    const nearestStr = sh.closestSinkhole ? `${sh.closestSinkhole.distanceMiles} mi ${sh.closestSinkhole.bearing}` : "None in 5 mi";
+    addDataKeyVal("NEAREST SINKHOLE", nearestStr, margin);
+    addDataKeyVal("WITHIN 1 MILE", `${sh.pointsWithin1Mi} recorded`, margin + 160);
+    addDataKeyVal("WITHIN 3 MILES", `${sh.pointsWithin3Mi} recorded`, margin + 320);
+    y += 34;
+
+    const rockUnitStr = sh.underlyingBedrock ? sh.underlyingBedrock.unitName : "Non-karst rock / unmapped";
+    const rockTypeStr = sh.underlyingBedrock ? `${sh.underlyingBedrock.rockType} (${sh.underlyingBedrock.exposure === "E" ? "Surface/shallow" : "Buried"})` : "Low susceptibility";
+    addDataKeyVal("UNDERLYING FORMATION", rockUnitStr, margin);
+    addDataKeyVal("LITHOLOGY & EXPOSURE", rockTypeStr, margin + 260);
+    y += 34;
+
+    try {
+      const mapW = pageWidth - margin * 2;
+      const mapH = mapW * (480 / 640);
+      checkPageBreak(mapH + 22);
+
+      if (sinkholeImg) {
+        const fmt = detectImageFormat(sinkholeImg);
+        doc.addImage(sinkholeImg, fmt, margin, y, mapW, mapH);
+      } else {
+        doc.setFillColor(235, 238, 230);
+        doc.setDrawColor(201, 207, 192);
+        doc.rect(margin, y, mapW, mapH, "FD");
+      }
+
+      const delta = (2 / 69) * 1.15;
+      const minX = rep.lon - delta, maxX = rep.lon + delta;
+      const minY = rep.lat - delta, maxY = rep.lat + delta;
+      const mapTopY = y;
+      const proj = (px, py) => [
+        margin + (px - minX) / (maxX - minX) * mapW,
+        mapTopY + mapH - (py - minY) / (maxY - minY) * mapH
+      ];
+
+      doc.saveGraphicsState();
+      doc.rect(margin, mapTopY, mapW, mapH, null);
+      doc.clip();
+      doc.discardPath();
+
+      if (sh.geologyPolygons?.length) {
+        sh.geologyPolygons.forEach(feat => {
+          (feat.geometry?.rings || []).forEach(ring => {
+            const pts = ring.map(pt => proj(pt[0], pt[1]));
+            if (pts.length < 3) return;
+            try {
+              if (typeof doc.GState === "function") {
+                const gs = new doc.GState({ opacity: 0.12 });
+                doc.saveGraphicsState();
+                doc.setGState(gs);
+                doc.setFillColor(173, 110, 40);
+                drawPolygonFilledOnly(doc, pts);
+                doc.restoreGraphicsState();
+              }
+            } catch (e) {}
+
+            doc.setDrawColor(173, 110, 40);
+            doc.setLineWidth(1.1);
+            if (typeof doc.setLineDashPattern === "function") doc.setLineDashPattern([4, 3], 0);
+            drawPolygonOutline(doc, pts);
+            if (typeof doc.setLineDashPattern === "function") doc.setLineDashPattern([], 0);
+          });
+        });
+      }
+
+      // Range rings
+      const [pinX, pinY] = proj(rep.lon, rep.lat);
+      const ringRadii = [0.5, 1.0, 2.0];
+      doc.setDrawColor(237, 240, 230);
+      doc.setLineWidth(0.8);
+      if (typeof doc.setLineDashPattern === "function") doc.setLineDashPattern([3, 3], 0);
+      ringRadii.forEach(rMiles => {
+        const [, rY] = proj(rep.lon, rep.lat + rMiles / 69);
+        const rPx = Math.abs(pinY - rY);
+        if (rPx <= mapW && rPx <= mapH) {
+          doc.circle(pinX, pinY, rPx);
+          doc.setFont("courier", "bold");
+          doc.setFontSize(6.5);
+          doc.setTextColor(248, 249, 242);
+          doc.text(`${rMiles} mi`, pinX, pinY - rPx + 7.5, { align: "center" });
+        }
+      });
+      if (typeof doc.setLineDashPattern === "function") doc.setLineDashPattern([], 0);
+
+      // Documented sinkholes (dots)
+      sh.allPoints.forEach(p => {
+        if (p.distanceMiles > 2.5) return;
+        const [dotX, dotY] = proj(p.lon, p.lat);
+        if (dotX >= margin && dotX <= margin + mapW && dotY >= mapTopY && dotY <= mapTopY + mapH) {
+          const isClose = p.distanceMiles <= 1.0;
+          const dotRgb = hexToRgb(isClose ? "#DC2626" : "#D97706");
+          doc.setFillColor(dotRgb.r, dotRgb.g, dotRgb.b);
+          doc.circle(dotX, dotY, isClose ? 4.8 : 3.4, "F");
+          doc.setFillColor(255, 255, 255);
+          doc.circle(dotX, dotY, isClose ? 2.5 : 1.7, "F");
+          doc.setFillColor(dotRgb.r, dotRgb.g, dotRgb.b);
+          doc.circle(dotX, dotY, isClose ? 1.2 : 0.8, "F");
+        }
+      });
+
+      // Target parcel crosshair pin
+      doc.setDrawColor(29, 78, 216);
+      doc.setLineWidth(1.4);
+      doc.line(pinX - 12, pinY, pinX - 5, pinY);
+      doc.line(pinX + 5, pinY, pinX + 12, pinY);
+      doc.line(pinX, pinY - 12, pinX, pinY - 5);
+      doc.line(pinX, pinY + 5, pinX, pinY + 12);
+      doc.setFillColor(29, 78, 216);
+      doc.circle(pinX, pinY, 6, "F");
+      doc.setFillColor(255, 255, 255);
+      doc.circle(pinX, pinY, 3.8, "F");
+      doc.setFillColor(29, 78, 216);
+      doc.circle(pinX, pinY, 2.4, "F");
+      doc.setFillColor(255, 255, 255);
+      doc.circle(pinX, pinY, 0.9, "F");
+
+      // Legend box inside map
+      doc.setFillColor(248, 249, 242);
+      doc.setDrawColor(201, 207, 192);
+      doc.setLineWidth(0.8);
+      const legW = 225, legH = 38;
+      const legX = margin + mapW - legW - 8;
+      const legY = mapTopY + mapH - legH - 8;
+      doc.roundedRect(legX, legY, legW, legH, 3, 3, "FD");
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(24, 33, 41);
+
+      doc.setFillColor(29, 78, 216);
+      doc.circle(legX + 10, legY + 11, 3.2, "F");
+      doc.setFillColor(255, 255, 255);
+      doc.circle(legX + 10, legY + 11, 1.4, "F");
+      doc.setFillColor(29, 78, 216);
+      doc.circle(legX + 10, legY + 11, 0.7, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(29, 78, 216);
+      doc.text("Target Parcel", legX + 18, legY + 13);
+
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(24, 33, 41);
+      doc.setFillColor(240, 225, 200);
+      doc.setDrawColor(173, 110, 40);
+      doc.rect(legX + 6, legY + 22, 8, 8, "FD");
+      doc.text("Soluble Karst Bedrock", legX + 18, legY + 28);
+
+      doc.setFillColor(220, 38, 38);
+      doc.circle(legX + 118, legY + 11, 3.4, "F");
+      doc.setFillColor(255, 255, 255);
+      doc.circle(legX + 118, legY + 11, 1.5, "F");
+      doc.setFillColor(220, 38, 38);
+      doc.circle(legX + 118, legY + 11, 0.7, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(220, 38, 38);
+      doc.text("Sinkhole (<1 mi)", legX + 128, legY + 13);
+
+      doc.setFillColor(217, 119, 6);
+      doc.circle(legX + 118, legY + 26, 3, "F");
+      doc.setFillColor(255, 255, 255);
+      doc.circle(legX + 118, legY + 26, 1.3, "F");
+      doc.setFillColor(217, 119, 6);
+      doc.circle(legX + 118, legY + 26, 0.6, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(217, 119, 6);
+      doc.text("Sinkhole (1–5 mi)", legX + 128, legY + 28);
+
+      doc.restoreGraphicsState();
+      y += mapH + 8;
+      addParagraph("Location-level sinkhole map: Aerial imagery with parcel location (crosshair), range rings, and documented sinkholes (dots) within 2 miles.", 8.5);
+    } catch (err) {
+      console.error("Sinkhole map PDF render error:", err);
+      addParagraph("Sinkhole map could not be drawn into this PDF.");
+    }
+
+    if (sh.allPoints.length > 0) {
+      checkPageBreak(70);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9.5);
+      doc.setTextColor(24, 33, 41);
+      doc.text("Documented Sinkholes in Vicinity (Nearest Records)", margin, y);
+      y += 12;
+
+      doc.setFillColor(237, 240, 230);
+      doc.rect(margin, y, pageWidth - margin * 2, 14, "F");
+      doc.setFont("courier", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(76, 90, 98);
+      doc.text("REF ID", margin + 4, y + 10);
+      doc.text("DISTANCE / DIR", margin + 65, y + 10);
+      doc.text("DATE", margin + 155, y + 10);
+      doc.text("DIMENSIONS", margin + 220, y + 10);
+      doc.text("FIELD NOTES & DAMAGE", margin + 295, y + 10);
+      y += 16;
+
+      sh.allPoints.slice(0, 5).forEach((p, idx) => {
+        checkPageBreak(16);
+        doc.setFont("courier", "normal");
+        doc.setFontSize(7.5);
+        doc.setTextColor(24, 33, 41);
+        doc.text(String(p.id || `Inc-${idx + 1}`).substring(0, 10), margin + 4, y + 9);
+        doc.setTextColor(p.distanceMiles <= 1 ? 220 : 217, p.distanceMiles <= 1 ? 38 : 119, p.distanceMiles <= 1 ? 38 : 6);
+        doc.text(`${p.distanceMiles} mi ${p.bearing}`, margin + 65, y + 9);
+        doc.setTextColor(70, 80, 86);
+        doc.text(String(p.date || "Unrecorded").substring(0, 12), margin + 155, y + 9);
+        doc.text(p.depthFt ? `${p.depthFt}ft deep` : "—", margin + 220, y + 9);
+        const commentLines = doc.splitTextToSize(String(p.comments || p.damage || "Documented subsidence"), pageWidth - margin * 2 - 300);
+        doc.text(commentLines[0] || "—", margin + 295, y + 9);
+        y += 13;
+      });
+      y += 6;
+    }
+    addParagraph(sh.sourceDescription, 8);
+    addDivider();
+
+    // 07 Historical loss events (Deduplicated in PDF)
+    addSectionHeader("7. Nearby Historical Loss Events");
+    if (rep.disasterErr) {
+      addParagraph("Disaster history service unavailable.");
+    } else if (rep.disasters.length) {
+      addParagraph(rep.county ? `Federally declared disasters affecting ${rep.county}, ${rep.stateAbbr}, since 2000:` : "Federally declared disasters affecting this county since 2000:");
+      rep.disasters.slice(0, 6).forEach(d => {
+        checkPageBreak(22);
+        doc.setFont("courier", "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(173, 110, 40);
+        doc.text(String(new Date(d.declarationDate || d.incidentBeginDate).getFullYear()), margin, y);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.5);
+        doc.setTextColor(24, 33, 41);
+        doc.text(String(d.incidentType || ""), margin + 38, y);
+        y += 11;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.setTextColor(90, 98, 92);
+        const titleLines = doc.splitTextToSize(String(d.declarationTitle || ""), pageWidth - margin * 2 - 38);
+        doc.text(titleLines, margin + 38, y);
+        y += titleLines.length * 10 + 5;
+      });
+    } else {
+      addParagraph("No federally declared disasters found for this county since 2000.");
+    }
+    addDivider();
+
+    // 08 EPA
+    addSectionHeader("8. EPA Contamination & Environmental Hazards");
+    if (rep.epaErr) {
+      addParagraph("EPA site data service unavailable.");
+    } else {
+      const superfund = rep.epa?.superfund || [];
+      const gen = rep.epa?.general || [];
+      addParagraph(`${superfund.length} Superfund (NPL) site(s) within 3 miles; ${gen.length} other EPA-regulated facilities within 1 mile.`);
+      superfund.forEach(s => {
+        checkPageBreak(20);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.5);
+        doc.setTextColor(150, 56, 42);
+        doc.text("NPL: " + (s.NAME || "Superfund site"), margin, y);
+        y += 11;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.setTextColor(70, 80, 86);
+        doc.text(`${s.City || ""}, ${s.State || ""} — ${s.NPL_STATUS || "National Priorities List site"}`, margin, y);
+        y += 11;
+      });
+    }
+    addDivider();
+
+    // 09 Insurance
+    addSectionHeader("9. Estimated Insurance Cost Range");
+    addParagraph(`Illustrative annual ranges for a home valued around ${formatDollars(rep.homeValue)}, ${rep.deductiblePct}% hurricane deductible${rep.mitigated ? ", with wind mitigation credits" : ""}${rep.includeFlood ? "" : ", flood policy excluded"}.`);
+    checkPageBreak(48);
+    addDataKeyVal("HOMEOWNERS (INCL. WIND)", `${formatDollars(hLo)} - ${formatDollars(hHi)}`, margin);
+    addDataKeyVal("FLOOD (NFIP-STYLE)", rep.includeFlood ? `${formatDollars(fLo)} - ${formatDollars(fHi)}` : "Not included", margin + 220);
+    y += 38;
+
+    checkPageBreak(36);
+    doc.setFillColor(248, 249, 242);
+    doc.setDrawColor(24, 33, 41);
+    doc.setLineWidth(1.2);
+    doc.rect(margin, y, pageWidth - margin * 2, 28, "FD");
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(76, 90, 98);
+    doc.text("COMBINED ESTIMATED ANNUAL PREMIUM RANGE", margin + 10, y + 11);
+    doc.setFont("courier", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(24, 33, 41);
+    doc.text(`${formatDollars(hLo + effFLo)} – ${formatDollars(hHi + effFHi)} / yr${rep.includeFlood ? "" : " (homeowners only)"}`, margin + 10, y + 22);
+    y += 34;
+
+    addDivider();
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.setTextColor(140, 150, 140);
+    const disclaimerLines = doc.splitTextToSize("Screening tool for early diligence, not a substitute for a flood elevation certificate, wind mitigation inspection, geotechnical sinkhole investigation, or licensed insurance quote.", pageWidth - margin * 2);
+    checkPageBreak(disclaimerLines.length * 10);
+    doc.text(disclaimerLines, margin, y);
+
+    const filename = "hazard-report-" + (rep.county || rep.stateAbbr || "property").toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".pdf";
+    doc.save(filename);
+  } catch (err) {
+    console.error("PDF generation error:", err);
+    setStatusMessage("Could not generate PDF report. Please try again.", true);
+  } finally {
+    if (pdfBtn) {
+      pdfBtn.disabled = false;
+      pdfBtn.textContent = "Download PDF report";
+    }
+  }
+}
+
+function resetSearch() {
+  const repEl = document.getElementById("report");
+  const input = document.getElementById("address-input");
+  if (repEl) repEl.style.display = "none";
+  if (input) input.value = "";
+  userManuallyToggledFlood = false;
+  setStatusMessage("");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function initApp() {
+  document.getElementById("go-btn")?.addEventListener("click", e => {
+    e.preventDefault();
+    generateReport();
+  });
+  document.getElementById("address-input")?.addEventListener("keydown", e => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      generateReport();
+    }
+  });
+  document.getElementById("pdf-btn")?.addEventListener("click", () => {
+    downloadPdfReport();
+  });
+  document.getElementById("new-search-btn")?.addEventListener("click", () => {
+    resetSearch();
+  });
+  document.getElementById("include-flood")?.addEventListener("change", () => {
+    userManuallyToggledFlood = true;
+    if (currentReport) {
+      currentReport.includeFlood = document.getElementById("include-flood")?.checked ?? false;
+      renderReportUi(currentReport);
+    }
+  });
+
+  document.getElementById("sh-zoom-1")?.addEventListener("click", () => {
+    currentSinkholeRadius = 1.0;
+    updateZoomButtons();
+    if (currentReport) updateSinkholeMap(currentReport.lat, currentReport.lon, currentReport);
+  });
+  document.getElementById("sh-zoom-2")?.addEventListener("click", () => {
+    currentSinkholeRadius = 2.0;
+    updateZoomButtons();
+    if (currentReport) updateSinkholeMap(currentReport.lat, currentReport.lon, currentReport);
+  });
+  document.getElementById("sh-zoom-5")?.addEventListener("click", () => {
+    currentSinkholeRadius = 5.0;
+    updateZoomButtons();
+    if (currentReport) updateSinkholeMap(currentReport.lat, currentReport.lon, currentReport);
+  });
+
+  document.getElementById("sh-type-sat")?.addEventListener("click", () => {
+    currentSinkholeBasemapType = "satellite";
+    updateTypeButtons();
+    if (currentReport) updateSinkholeMap(currentReport.lat, currentReport.lon, currentReport);
+  });
+  document.getElementById("sh-type-topo")?.addEventListener("click", () => {
+    currentSinkholeBasemapType = "topo";
+    updateTypeButtons();
+    if (currentReport) updateSinkholeMap(currentReport.lat, currentReport.lon, currentReport);
+  });
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initApp);
+} else {
+  initApp();
+}
+
+window.runReport = generateReport;
+window.resetSearch = resetSearch;
+window.downloadPDF = downloadPdfReport;
+window.downloadPdfReport = downloadPdfReport;
+window.setSinkholeZoom = function(r) {
+  currentSinkholeRadius = r;
+  updateZoomButtons();
+  if (currentReport) updateSinkholeMap(currentReport.lat, currentReport.lon, currentReport);
+};
+window.toggleSinkholeBasemap = function(t) {
+  currentSinkholeBasemapType = t;
+  updateTypeButtons();
+  if (currentReport) updateSinkholeMap(currentReport.lat, currentReport.lon, currentReport);
+};
+window.selectSinkholeFromTable = selectSinkholeFromTable;
+window.highlightSinkholeInList = highlightSinkholeInTable;
+
+</script>
+</body>
+</html>
